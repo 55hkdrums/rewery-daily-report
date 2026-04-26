@@ -1,0 +1,15 @@
+{
+  "name": "brewery-daily-report",
+  "version": "1.0.0",
+  "description": "醸造所向け・日報記録アプリ",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}
