@@ -13,8 +13,8 @@
       items: ['デリコ出荷対応', '県販出荷対応', '個人出荷対応', '配達']
     },
     {
-      name: 'ラベル貼り', icon: '🏷️', colorClass: 'card-label', color: '#9e9e9e',
-      items: ['PETラベル貼り', '瓶ラベル貼り']
+      name: '在庫作り', icon: '📦', colorClass: 'card-label', color: '#9e9e9e',
+      items: ['ラベル貼り', '箱詰め作業', 'その他']
     },
     {
       name: '詰め作業', icon: '🫙', colorClass: 'card-fill', color: '#42a5f5',
@@ -22,11 +22,11 @@
     },
     {
       name: '売店', icon: '🏪', colorClass: 'card-shop', color: '#ab47bc',
-      items: [] // 直接記録
+      items: ['売店', '事務関係']
     },
     {
       name: 'その他共通', icon: '📋', colorClass: 'card-other', color: '#e0e0e0',
-      items: ['会議・打ち合わせ']
+      items: ['会議・打ち合わせ', '休憩']
     }
   ];
 
