@@ -10,15 +10,18 @@
     },
     {
       name: '出荷対応', icon: '🚚', colorClass: 'card-ship', color: '#8bc34a',
-      items: ['デリコ出荷対応', '県販出荷対応', '個人出荷対応', '配達']
+      items: ['デリコ出荷対応', '県販出荷対応', '個人出荷対応', '配達'],
+      hasNoteInput: true
     },
     {
       name: '在庫作り', icon: '📦', colorClass: 'card-label', color: '#9e9e9e',
-      items: ['ラベル貼り', '箱詰め作業', 'その他']
+      items: ['ラベル貼り', '箱詰め作業', 'その他'],
+      hasNoteInput: true
     },
     {
       name: '詰め作業', icon: '🫙', colorClass: 'card-fill', color: '#42a5f5',
-      items: ['缶ビール', '瓶ビール', 'ビールPET', '日本酒']
+      items: ['缶ビール', '瓶ビール', 'ビールPET', '日本酒'],
+      hasNoteInput: true
     },
     {
       name: '売店', icon: '🏪', colorClass: 'card-shop', color: '#ab47bc',
@@ -26,7 +29,7 @@
     },
     {
       name: 'その他共通', icon: '📋', colorClass: 'card-other', color: '#e0e0e0',
-      items: ['会議・打ち合わせ', '休憩']
+      items: ['会議・打ち合わせ', '休憩', '資料作成']
     }
   ];
 
@@ -100,9 +103,9 @@
   }
 
   // ===== Record Work =====
-  async function recordWork(category, subcategory, color) {
+  async function recordWork(category, subcategory, color, note) {
     try {
-      const res = await API.createRecord(category, subcategory, color);
+      const res = await API.createRecord(category, subcategory, color, note);
       if (res.success) {
         showToast(res.message);
         showView('main');
@@ -111,6 +114,54 @@
     } catch (e) {
       showToast('記録に失敗しました');
     }
+  }
+
+  // ===== Note Input Dialog =====
+  function showNoteDialog(category, subcategory, color) {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box note-dialog">
+        <p class="note-dialog-title">📝 ${subcategory}</p>
+        <p class="note-dialog-subtitle">メモを入力しますか？</p>
+        <div class="note-toggle-wrap">
+          <button class="note-toggle-btn active" data-mode="skip">入力しない</button>
+          <button class="note-toggle-btn" data-mode="input">入力する</button>
+        </div>
+        <div class="note-input-wrap hidden">
+          <textarea class="note-textarea" placeholder="メモを入力..." rows="3"></textarea>
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn confirm-cancel">キャンセル</button>
+          <button class="confirm-btn confirm-ok note-ok-btn">記録する</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const skipBtn = overlay.querySelector('[data-mode="skip"]');
+    const inputBtn = overlay.querySelector('[data-mode="input"]');
+    const inputWrap = overlay.querySelector('.note-input-wrap');
+    const textarea = overlay.querySelector('.note-textarea');
+
+    skipBtn.addEventListener('click', () => {
+      skipBtn.classList.add('active');
+      inputBtn.classList.remove('active');
+      inputWrap.classList.add('hidden');
+    });
+    inputBtn.addEventListener('click', () => {
+      inputBtn.classList.add('active');
+      skipBtn.classList.remove('active');
+      inputWrap.classList.remove('hidden');
+      textarea.focus();
+    });
+
+    overlay.querySelector('.confirm-cancel').onclick = () => overlay.remove();
+    overlay.querySelector('.note-ok-btn').onclick = () => {
+      const note = inputBtn.classList.contains('active') ? textarea.value.trim() || null : null;
+      overlay.remove();
+      recordWork(category, subcategory, color, note);
+    };
   }
 
   // ===== Check Current Work Status =====
@@ -172,12 +223,14 @@
         const label = r.subcategory ? `${r.subcategory}` : r.category;
         const durText = r.duration_minutes != null ? `${Math.round(r.duration_minutes)}分` : '作業中...';
         const timeText = r.end_time ? `${r.start_time} → ${r.end_time}` : `${r.start_time} →`;
+        const noteHtml = r.note ? `<div class="tl-note">📝 ${r.note}</div>` : '';
         return `
           <div class="timeline-item" data-id="${r.id}">
             <div class="tl-color" style="background:${r.color}"></div>
             <div class="tl-info">
               <div class="tl-category">${label}</div>
               <div class="tl-sub">${r.category}</div>
+              ${noteHtml}
               <div class="tl-time">${timeText}</div>
             </div>
             <div class="tl-duration">${durText}</div>
@@ -422,7 +475,11 @@
       const catIdx = parseInt(btn.dataset.cat);
       const itemIdx = parseInt(btn.dataset.item);
       const cat = CATEGORIES[catIdx];
-      recordWork(cat.name, cat.items[itemIdx], cat.color);
+      if (cat.hasNoteInput) {
+        showNoteDialog(cat.name, cat.items[itemIdx], cat.color);
+      } else {
+        recordWork(cat.name, cat.items[itemIdx], cat.color);
+      }
     });
 
     // Bottom actions
