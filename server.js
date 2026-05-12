@@ -19,7 +19,7 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/records', async (req, res) => {
   try {
-    const { category, subcategory, color } = req.body;
+    const { category, subcategory, color, note } = req.body;
     const now = new Date();
     const date = formatDate(now);
     const startTime = formatTime(now);
@@ -36,8 +36,8 @@ app.post('/api/records', async (req, res) => {
       closedPrevious = { id: openRecord.id, category: openRecord.category, subcategory: openRecord.subcategory, endTime: startTime };
     }
 
-    await execute('INSERT INTO work_records (date, category, subcategory, color, start_time) VALUES (?, ?, ?, ?, ?)',
-      [date, category, subcategory || null, color, startTime]);
+    await execute('INSERT INTO work_records (date, category, subcategory, color, start_time, note) VALUES (?, ?, ?, ?, ?, ?)',
+      [date, category, subcategory || null, color, startTime, note || null]);
 
     res.json({
       success: true,
