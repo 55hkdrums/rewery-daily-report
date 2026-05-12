@@ -9,8 +9,8 @@ const API = {
     return res.json();
   },
 
-  createRecord(category, subcategory, color) {
-    return this.request('POST', '/api/records', { category, subcategory, color });
+  createRecord(category, subcategory, color, note) {
+    return this.request('POST', '/api/records', { category, subcategory, color, note });
   },
 
   getRecords(date) {
