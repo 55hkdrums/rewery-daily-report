@@ -17,8 +17,8 @@ const API = {
     return this.request('GET', `/api/records?date=${date}`);
   },
 
-  updateRecord(id, startTime, endTime) {
-    return this.request('PUT', `/api/records/${id}`, { start_time: startTime, end_time: endTime });
+  updateRecord(id, startTime, endTime, note, photo) {
+    return this.request('PUT', `/api/records/${id}`, { start_time: startTime, end_time: endTime, note, photo });
   },
 
   deleteRecord(id) {
