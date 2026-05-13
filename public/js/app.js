@@ -224,6 +224,7 @@
         const durText = r.duration_minutes != null ? `${Math.round(r.duration_minutes)}分` : '作業中...';
         const timeText = r.end_time ? `${r.start_time} → ${r.end_time}` : `${r.start_time} →`;
         const noteHtml = r.note ? `<div class="tl-note">📝 ${r.note}</div>` : '';
+        const photoHtml = r.photo ? `<div class="tl-photo"><img src="${r.photo}" alt="写真" class="tl-photo-thumb"></div>` : '';
         return `
           <div class="timeline-item" data-id="${r.id}">
             <div class="tl-color" style="background:${r.color}"></div>
@@ -231,6 +232,7 @@
               <div class="tl-category">${label}</div>
               <div class="tl-sub">${r.category}</div>
               ${noteHtml}
+              ${photoHtml}
               <div class="tl-time">${timeText}</div>
             </div>
             <div class="tl-duration">${durText}</div>
@@ -243,22 +245,43 @@
   }
 
   // ===== Edit Modal =====
-  function openEditModal(recordId, startTime, endTime) {
+  let editPhotoData = null; // null=変更なし, ''は削除, data:url=新写真
+  let editPhotoChanged = false;
+
+  function openEditModal(recordId, startTime, endTime, note, photo) {
     $('#edit-record-id').value = recordId;
     $('#edit-start-time').value = startTime;
     $('#edit-end-time').value = endTime || '';
+    $('#edit-note').value = note || '';
+
+    // 写真プレビュー
+    editPhotoData = undefined; // undefined=変更なし
+    editPhotoChanged = false;
+    $('#edit-photo-input').value = '';
+    if (photo) {
+      $('#photo-preview-img').src = photo;
+      $('#photo-preview-wrap').classList.remove('hidden');
+    } else {
+      $('#photo-preview-wrap').classList.add('hidden');
+      $('#photo-preview-img').src = '';
+    }
+
     $('#edit-modal').classList.remove('hidden');
   }
   function closeEditModal() {
     $('#edit-modal').classList.add('hidden');
+    editPhotoData = undefined;
+    editPhotoChanged = false;
   }
 
   async function saveEdit() {
     const id = $('#edit-record-id').value;
     const startTime = $('#edit-start-time').value;
     const endTime = $('#edit-end-time').value || null;
+    const note = $('#edit-note').value.trim() || null;
+    const photo = editPhotoChanged ? (editPhotoData || null) : undefined;
     try {
-      const res = await API.updateRecord(id, startTime, endTime);
+      const res = await API.updateRecord(id, startTime, endTime, note, photo);
       if (res.success) {
         showToast('修正しました');
         closeEditModal();
@@ -268,6 +291,45 @@
     } catch (e) {
       showToast('更新に失敗しました');
     }
+  }
+
+  // ===== Photo Compression =====
+  function compressImage(file, maxWidth, quality) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handlePhotoSelect(file) {
+    if (!file) return;
+    compressImage(file, 800, 0.6).then(dataUrl => {
+      editPhotoData = dataUrl;
+      editPhotoChanged = true;
+      $('#photo-preview-img').src = dataUrl;
+      $('#photo-preview-wrap').classList.remove('hidden');
+    });
+  }
+
+  function removePhoto() {
+    editPhotoData = '';
+    editPhotoChanged = true;
+    $('#photo-preview-wrap').classList.add('hidden');
+    $('#photo-preview-img').src = '';
+    $('#edit-photo-input').value = '';
   }
 
   async function deleteRecord() {
@@ -498,7 +560,11 @@
       const timeEl = item.querySelector('.tl-time');
       if (!timeEl) return;
       const parts = timeEl.textContent.split('→').map(s => s.trim());
-      openEditModal(id, parts[0], parts[1] || '');
+      const noteEl = item.querySelector('.tl-note');
+      const note = noteEl ? noteEl.textContent.replace(/^📝\s*/, '') : '';
+      const photoEl = item.querySelector('.tl-photo-thumb');
+      const photo = photoEl ? photoEl.src : '';
+      openEditModal(id, parts[0], parts[1] || '', note, photo);
     });
 
     // Edit modal
@@ -506,6 +572,12 @@
     $('#btn-edit-save').addEventListener('click', saveEdit);
     $('#btn-edit-delete').addEventListener('click', deleteRecord);
     $('.modal-backdrop').addEventListener('click', closeEditModal);
+
+    // Photo events
+    $('#edit-photo-input').addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) handlePhotoSelect(e.target.files[0]);
+    });
+    $('#btn-photo-remove').addEventListener('click', removePhoto);
 
     // Summary close
     $('#btn-summary-close').addEventListener('click', () => showView('main'));
