@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==================== HEALTH CHECK ====================
@@ -63,16 +63,18 @@ app.get('/api/records', async (req, res) => {
 app.put('/api/records/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { start_time, end_time } = req.body;
+    const { start_time, end_time, note, photo } = req.body;
     const record = await queryOne('SELECT * FROM work_records WHERE id = ?', [id]);
     if (!record) return res.status(404).json({ success: false, error: '記録が見つかりません' });
 
     const newStart = start_time || record.start_time;
     const newEnd = end_time !== undefined ? (end_time || null) : record.end_time;
     const duration = newEnd ? calcDuration(newStart, newEnd) : null;
+    const newNote = note !== undefined ? (note || null) : record.note;
+    const newPhoto = photo !== undefined ? (photo || null) : record.photo;
 
-    await execute('UPDATE work_records SET start_time = ?, end_time = ?, duration_minutes = ? WHERE id = ?',
-      [newStart, newEnd, duration, id]);
+    await execute('UPDATE work_records SET start_time = ?, end_time = ?, duration_minutes = ?, note = ?, photo = ? WHERE id = ?',
+      [newStart, newEnd, duration, newNote, newPhoto, id]);
     res.json({ success: true, message: '記録を更新しました' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
