@@ -37,12 +37,19 @@ async function initDb() {
       end_time TEXT,
       duration_minutes REAL,
       note TEXT,
+      photo TEXT,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )
   `);
   // 既存テーブルにnoteカラムがない場合は追加
   try {
     await db.execute('ALTER TABLE work_records ADD COLUMN note TEXT');
+  } catch (e) {
+    // カラムが既に存在する場合は無視
+  }
+  // 既存テーブルにphotoカラムがない場合は追加
+  try {
+    await db.execute('ALTER TABLE work_records ADD COLUMN photo TEXT');
   } catch (e) {
     // カラムが既に存在する場合は無視
   }
