@@ -35,5 +35,29 @@ const API = {
 
   getMonthlyAverages(month) {
     return this.request('GET', `/api/stats/monthly?month=${month}`);
+  },
+
+  getSchedule(weekStart) {
+    return this.request('GET', `/api/schedule?week=${weekStart}`);
+  },
+
+  saveSchedule(weekStart, scheduleData, photo) {
+    return this.request('PUT', '/api/schedule', { week_start: weekStart, schedule_data: scheduleData, photo });
+  },
+
+  getBrewSchedules() {
+    return this.request('GET', '/api/brew-schedules');
+  },
+
+  saveBrewSchedules(items) {
+    return this.request('PUT', '/api/brew-schedules', { items });
+  },
+
+  getFiltrationSchedules() {
+    return this.request('GET', '/api/filtration-schedules');
+  },
+
+  saveFiltrationSchedules(items) {
+    return this.request('PUT', '/api/filtration-schedules', { items });
   }
 };
