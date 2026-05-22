@@ -47,7 +47,8 @@
     subcategory: $('#view-subcategory'),
     timeline: $('#view-timeline'),
     summary: $('#view-summary'),
-    dashboard: $('#view-dashboard')
+    dashboard: $('#view-dashboard'),
+    schedule: $('#view-schedule')
   };
 
   // ===== Init =====
@@ -350,6 +351,282 @@
   }
 
   // ===== End Work =====
+
+  // ===== Schedule =====
+  const DAYS = ['mon','tue','wed','thu','fri','sat'];
+  const DAY_LABELS = ['月','火','水','木','金','土'];
+  const BEER_COLORS = [
+    { name: 'しらかば', color: '#f5c542' },
+    { name: 'アルクマ', color: '#ef5350' },
+    { name: 'りんどう', color: '#66bb6a' },
+    { name: 'くろゆり', color: '#ec407a' },
+    { name: 'ウィート', color: '#9e9e9e' },
+    { name: '七味唐からし', color: '#ff9800' },
+    { name: 'IPA', color: '#ab47bc' },
+    { name: 'ゴールデンエール', color: '#fdd835' },
+    { name: 'ハイボール', color: '#78909c' },
+    { name: 'にごり酒', color: '#8d6e63' },
+    { name: 'その他', color: '#42a5f5' }
+  ];
+
+  let currentWeekStart = getMonday(new Date());
+  let weeklyData = {};
+  let schedPhotoData = undefined;
+  let schedPhotoChanged = false;
+
+  function getMonday(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    date.setDate(diff);
+    return formatDateLocal(date);
+  }
+  function formatDateLocal(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return d;
+  }
+
+  async function showSchedule() {
+    showView('schedule', '📅 スケジュール');
+    await loadWeeklySchedule();
+  }
+
+  async function loadWeeklySchedule() {
+    updateWeekLabel();
+    try {
+      const res = await API.getSchedule(currentWeekStart);
+      if (res.success && res.schedule) {
+        weeklyData = res.schedule.schedule_data || {};
+        if (res.schedule.photo) {
+          $('#sched-photo-img').src = res.schedule.photo;
+          $('#sched-photo-preview').classList.remove('hidden');
+        } else {
+          $('#sched-photo-preview').classList.add('hidden');
+        }
+      } else {
+        weeklyData = {};
+        $('#sched-photo-preview').classList.add('hidden');
+      }
+      schedPhotoData = undefined;
+      schedPhotoChanged = false;
+      $('#sched-photo-input').value = '';
+      renderWeeklyGrid();
+    } catch (e) {
+      showToast('スケジュールの読み込みに失敗');
+    }
+  }
+
+  function updateWeekLabel() {
+    const mon = addDays(currentWeekStart, 0);
+    const sat = addDays(currentWeekStart, 5);
+    const ml = `${mon.getMonth()+1}/${mon.getDate()}`;
+    const sl = `${sat.getMonth()+1}/${sat.getDate()}`;
+    $('#week-label').textContent = `${ml} 〜 ${sl}`;
+  }
+
+  function renderWeeklyGrid() {
+    const headers = DAYS.map((day, i) => {
+      const d = addDays(currentWeekStart, i);
+      return `<th>${d.getDate()}${DAY_LABELS[i]}</th>`;
+    }).join('');
+
+    const periods = ['AM','PM'];
+    const rows = periods.map(p => {
+      const cells = DAYS.map(day => {
+        const val = (weeklyData[day] && weeklyData[day][p.toLowerCase()]) || '';
+        const cls = val ? 'grid-cell has-content' : 'grid-cell';
+        return `<td class="${cls}" data-day="${day}" data-period="${p.toLowerCase()}">${val}</td>`;
+      }).join('');
+      return `<tr><td class="period-label">${p}</td>${cells}</tr>`;
+    }).join('');
+
+    $('#weekly-grid').innerHTML = `
+      <table class="weekly-table">
+        <thead><tr><th></th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  function openCellEdit(day, period) {
+    const dayIdx = DAYS.indexOf(day);
+    const d = addDays(currentWeekStart, dayIdx);
+    const label = `${d.getMonth()+1}/${d.getDate()}(${DAY_LABELS[dayIdx]}) ${period.toUpperCase()}`;
+    $('#cell-edit-day').value = day;
+    $('#cell-edit-period').value = period;
+    $('#cell-edit-label').textContent = label;
+    $('#cell-edit-text').value = (weeklyData[day] && weeklyData[day][period]) || '';
+    $('#cell-edit-modal').classList.remove('hidden');
+    setTimeout(() => $('#cell-edit-text').focus(), 100);
+  }
+  function closeCellEdit() {
+    $('#cell-edit-modal').classList.add('hidden');
+  }
+  function saveCellEdit() {
+    const day = $('#cell-edit-day').value;
+    const period = $('#cell-edit-period').value;
+    const text = $('#cell-edit-text').value.trim();
+    if (!weeklyData[day]) weeklyData[day] = {};
+    weeklyData[day][period] = text;
+    renderWeeklyGrid();
+    closeCellEdit();
+  }
+
+  async function saveWeeklySchedule() {
+    try {
+      const photo = schedPhotoChanged ? (schedPhotoData || null) : undefined;
+      const res = await API.saveSchedule(currentWeekStart, weeklyData, photo);
+      if (res.success) showToast('スケジュールを保存しました');
+    } catch (e) {
+      showToast('保存に失敗しました');
+    }
+  }
+
+  // ===== Brew Schedule =====
+  let brewItems = [];
+
+  async function loadBrewSchedules() {
+    try {
+      const res = await API.getBrewSchedules();
+      if (res.success) brewItems = res.items || [];
+      renderBrewList();
+    } catch (e) {
+      showToast('仕込予定の読み込みに失敗');
+    }
+  }
+
+  function renderBrewList() {
+    $('#brew-list').innerHTML = brewItems.map((it, i) => `
+      <div class="el-row" data-idx="${i}">
+        <div class="el-num">${i + 1}</div>
+        <div class="el-fields">
+          <div class="el-field-row">
+            <div class="el-color-dot brew-color-dot" data-idx="${i}" style="background:${it.color || '#f5c542'}"></div>
+            <input class="el-input" data-field="beer_type" placeholder="液種" value="${it.beer_type || ''}">
+            <input class="el-input short" data-field="brew_number" placeholder="仕込 No." value="${it.brew_number || ''}">
+          </div>
+          <div class="el-field-row">
+            <input class="el-input medium" type="date" data-field="brew_date" value="${it.brew_date || ''}">
+          </div>
+        </div>
+        <button class="el-delete-btn" data-idx="${i}">✕</button>
+      </div>
+    `).join('') || '<div class="timeline-empty">仕込予定がありません</div>';
+  }
+
+  function addBrewRow() {
+    brewItems.push({ brew_date: '', beer_type: '', brew_number: '', color: '#f5c542' });
+    renderBrewList();
+  }
+
+  function collectBrewData() {
+    const rows = $$('#brew-list .el-row');
+    rows.forEach((row, i) => {
+      row.querySelectorAll('.el-input').forEach(inp => {
+        brewItems[i][inp.dataset.field] = inp.value;
+      });
+    });
+  }
+
+  async function saveBrewSchedules() {
+    collectBrewData();
+    try {
+      const res = await API.saveBrewSchedules(brewItems);
+      if (res.success) showToast('仕込予定を保存しました');
+    } catch (e) {
+      showToast('保存に失敗しました');
+    }
+  }
+
+  // ===== Filtration Schedule =====
+  let filtrationItems = [];
+
+  async function loadFiltrationSchedules() {
+    try {
+      const res = await API.getFiltrationSchedules();
+      if (res.success) filtrationItems = res.items || [];
+      renderFiltrationList();
+    } catch (e) {
+      showToast('濾過予定の読み込みに失敗');
+    }
+  }
+
+  function renderFiltrationList() {
+    $('#filtration-list').innerHTML = filtrationItems.map((it, i) => `
+      <div class="el-row" data-idx="${i}">
+        <div class="el-num">${i + 1}</div>
+        <div class="el-fields">
+          <div class="el-field-row">
+            <div class="el-color-dot filt-color-dot" data-idx="${i}" style="background:${it.color || '#f5c542'}"></div>
+            <input class="el-input" data-field="beer_type" placeholder="液種" value="${it.beer_type || ''}">
+            <input class="el-input short" data-field="brew_number" placeholder="仕込 No." value="${it.brew_number || ''}">
+          </div>
+          <div class="el-field-row">
+            <input class="el-input medium" type="date" data-field="filtration_date" value="${it.filtration_date || ''}">
+            <input class="el-input" data-field="note" placeholder="備考" value="${it.note || ''}">
+          </div>
+        </div>
+        <button class="el-delete-btn" data-idx="${i}">✕</button>
+      </div>
+    `).join('') || '<div class="timeline-empty">濾過予定がありません</div>';
+  }
+
+  function addFiltrationRow() {
+    filtrationItems.push({ beer_type: '', brew_number: '', filtration_date: '', note: '', color: '#f5c542' });
+    renderFiltrationList();
+  }
+
+  function collectFiltrationData() {
+    const rows = $$('#filtration-list .el-row');
+    rows.forEach((row, i) => {
+      row.querySelectorAll('.el-input').forEach(inp => {
+        filtrationItems[i][inp.dataset.field] = inp.value;
+      });
+    });
+  }
+
+  async function saveFiltrationSchedules() {
+    collectFiltrationData();
+    try {
+      const res = await API.saveFiltrationSchedules(filtrationItems);
+      if (res.success) showToast('濾過予定を保存しました');
+    } catch (e) {
+      showToast('保存に失敗しました');
+    }
+  }
+
+  // ===== Color Picker =====
+  function showColorPicker(dotEl, items, idx) {
+    const existing = document.querySelector('.color-picker-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'color-picker-overlay';
+    document.body.appendChild(overlay);
+
+    const popup = document.createElement('div');
+    popup.className = 'color-picker-popup';
+    const rect = dotEl.getBoundingClientRect();
+    popup.style.top = `${rect.bottom + 8}px`;
+    popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 230))}px`;
+    popup.innerHTML = BEER_COLORS.map(c =>
+      `<div class="cp-swatch${items[idx].color === c.color ? ' active' : ''}" style="background:${c.color}" data-color="${c.color}" title="${c.name}"></div>`
+    ).join('');
+    document.body.appendChild(popup);
+
+    const close = () => { overlay.remove(); popup.remove(); };
+    overlay.addEventListener('click', close);
+    popup.addEventListener('click', (e) => {
+      const sw = e.target.closest('.cp-swatch');
+      if (!sw) return;
+      items[idx].color = sw.dataset.color;
+      dotEl.style.background = sw.dataset.color;
+      close();
+    });
+  }
   async function endWork() {
     showConfirm('退勤しますか？\n本日の作業を集計します。', async () => {
       try {
@@ -546,6 +823,7 @@
 
     // Bottom actions
     $('#btn-timeline').addEventListener('click', () => showTimeline());
+    $('#btn-schedule').addEventListener('click', () => showSchedule());
     $('#btn-dashboard').addEventListener('click', () => showDashboard());
     $('#btn-end-work').addEventListener('click', () => endWork());
 
@@ -599,6 +877,98 @@
 
     // Dashboard month change
     $('#dashboard-month').addEventListener('change', () => loadDashboard('monthly'));
+
+    // ===== Schedule Events =====
+    // Tab switching
+    $$('.sched-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        $$('.sched-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        $$('.sched-panel').forEach(p => p.classList.remove('active'));
+        const panel = tab.dataset.stab;
+        $(`#sched-${panel}`).classList.add('active');
+        if (panel === 'brew') loadBrewSchedules();
+        if (panel === 'filtration') loadFiltrationSchedules();
+      });
+    });
+
+    // Week navigation
+    $('#btn-week-prev').addEventListener('click', () => {
+      currentWeekStart = formatDateLocal(addDays(currentWeekStart, -7));
+      loadWeeklySchedule();
+    });
+    $('#btn-week-next').addEventListener('click', () => {
+      currentWeekStart = formatDateLocal(addDays(currentWeekStart, 7));
+      loadWeeklySchedule();
+    });
+
+    // Grid cell click
+    $('#weekly-grid').addEventListener('click', (e) => {
+      const cell = e.target.closest('.grid-cell');
+      if (cell) openCellEdit(cell.dataset.day, cell.dataset.period);
+    });
+
+    // Cell edit modal
+    $('#btn-cell-cancel').addEventListener('click', closeCellEdit);
+    $('#btn-cell-save').addEventListener('click', saveCellEdit);
+    $('.cell-modal-backdrop').addEventListener('click', closeCellEdit);
+
+    // Save weekly
+    $('#btn-save-weekly').addEventListener('click', saveWeeklySchedule);
+
+    // Schedule photo
+    $('#sched-photo-input').addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        compressImage(e.target.files[0], 1200, 0.7).then(dataUrl => {
+          schedPhotoData = dataUrl;
+          schedPhotoChanged = true;
+          $('#sched-photo-img').src = dataUrl;
+          $('#sched-photo-preview').classList.remove('hidden');
+        });
+      }
+    });
+    $('#btn-sched-photo-remove').addEventListener('click', () => {
+      schedPhotoData = '';
+      schedPhotoChanged = true;
+      $('#sched-photo-preview').classList.add('hidden');
+      $('#sched-photo-input').value = '';
+    });
+
+    // Brew list events
+    $('#btn-brew-add').addEventListener('click', addBrewRow);
+    $('#btn-save-brew').addEventListener('click', saveBrewSchedules);
+    $('#brew-list').addEventListener('click', (e) => {
+      const delBtn = e.target.closest('.el-delete-btn');
+      if (delBtn) {
+        collectBrewData();
+        brewItems.splice(parseInt(delBtn.dataset.idx), 1);
+        renderBrewList();
+        return;
+      }
+      const colorDot = e.target.closest('.brew-color-dot');
+      if (colorDot) {
+        collectBrewData();
+        showColorPicker(colorDot, brewItems, parseInt(colorDot.dataset.idx));
+      }
+    });
+
+    // Filtration list events
+    $('#btn-filtration-add').addEventListener('click', addFiltrationRow);
+    $('#btn-save-filtration').addEventListener('click', saveFiltrationSchedules);
+    $('#filtration-list').addEventListener('click', (e) => {
+      const delBtn = e.target.closest('.el-delete-btn');
+      if (delBtn) {
+        collectFiltrationData();
+        filtrationItems.splice(parseInt(delBtn.dataset.idx), 1);
+        renderFiltrationList();
+        return;
+      }
+      const colorDot = e.target.closest('.filt-color-dot');
+      if (colorDot) {
+        collectFiltrationData();
+        showColorPicker(colorDot, filtrationItems, parseInt(colorDot.dataset.idx));
+      }
+    });
   }
 
   // ===== Start =====
