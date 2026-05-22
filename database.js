@@ -54,6 +54,41 @@ async function initDb() {
     // カラムが既に存在する場合は無視
   }
   await db.execute('CREATE INDEX IF NOT EXISTS idx_work_records_date ON work_records(date)');
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS weekly_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_start TEXT NOT NULL UNIQUE,
+      schedule_data TEXT NOT NULL DEFAULT '{}',
+      photo TEXT,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS brew_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      row_order INTEGER NOT NULL DEFAULT 0,
+      brew_date TEXT,
+      beer_type TEXT,
+      brew_number TEXT,
+      color TEXT DEFAULT '#f5c542',
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS filtration_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      row_order INTEGER NOT NULL DEFAULT 0,
+      beer_type TEXT,
+      brew_number TEXT,
+      filtration_date TEXT,
+      note TEXT,
+      color TEXT DEFAULT '#f5c542',
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
   console.log(`📦 DB接続: ${isProduction ? 'Turso Cloud' : 'ローカルファイル'}`);
 }
 
