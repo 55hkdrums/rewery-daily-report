@@ -49,6 +49,10 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           タイムライン
         </button>
+        <button id="btn-schedule" class="action-btn schedule-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="9" y1="4" x2="9" y2="22"></line></svg>
+          スケジュール
+        </button>
         <button id="btn-dashboard" class="action-btn dashboard-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
           分析
@@ -149,6 +153,75 @@
         <!-- JSで動的生成 -->
       </div>
     </main>
+
+    <!-- スケジュール画面 -->
+    <main id="view-schedule" class="view">
+      <div class="schedule-tabs">
+        <button class="sched-tab active" data-stab="weekly">週間日程</button>
+        <button class="sched-tab" data-stab="brew">仕込予定</button>
+        <button class="sched-tab" data-stab="filtration">濾過火入れ</button>
+      </div>
+
+      <!-- タブ1: 週間スケジュール -->
+      <div id="sched-weekly" class="sched-panel active">
+        <div class="week-nav">
+          <button id="btn-week-prev" class="week-nav-btn">◀</button>
+          <span id="week-label" class="week-label"></span>
+          <button id="btn-week-next" class="week-nav-btn">▶</button>
+        </div>
+        <div id="weekly-grid" class="weekly-grid">
+          <!-- JSで動的生成 -->
+        </div>
+        <div class="sched-photo-section">
+          <label for="sched-photo-input" class="photo-attach-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            スケジュール写真
+          </label>
+          <input type="file" id="sched-photo-input" accept="image/*" capture="environment" class="photo-file-input">
+          <div id="sched-photo-preview" class="photo-preview-wrap hidden">
+            <img id="sched-photo-img" class="photo-preview-img sched-photo-full" alt="スケジュール">
+            <button id="btn-sched-photo-remove" class="photo-remove-btn" type="button">✕</button>
+          </div>
+        </div>
+        <button id="btn-save-weekly" class="sched-save-btn">保存</button>
+      </div>
+
+      <!-- タブ2: 仕込予定 -->
+      <div id="sched-brew" class="sched-panel">
+        <div id="brew-list" class="editable-list">
+          <!-- JSで動的生成 -->
+        </div>
+        <button id="btn-brew-add" class="list-add-btn">＋ 行を追加</button>
+        <button id="btn-save-brew" class="sched-save-btn">保存</button>
+      </div>
+
+      <!-- タブ3: 濾過火入れ予定 -->
+      <div id="sched-filtration" class="sched-panel">
+        <div id="filtration-list" class="editable-list">
+          <!-- JSで動的生成 -->
+        </div>
+        <button id="btn-filtration-add" class="list-add-btn">＋ 行を追加</button>
+        <button id="btn-save-filtration" class="sched-save-btn">保存</button>
+      </div>
+    </main>
+
+    <!-- セル編集モーダル -->
+    <div id="cell-edit-modal" class="modal hidden">
+      <div class="modal-backdrop cell-modal-backdrop"></div>
+      <div class="modal-content">
+        <h3 class="modal-title">✒️ セルを編集</h3>
+        <input type="hidden" id="cell-edit-day">
+        <input type="hidden" id="cell-edit-period">
+        <div class="modal-field">
+          <label id="cell-edit-label" for="cell-edit-text"></label>
+          <textarea id="cell-edit-text" class="note-textarea" placeholder="作業内容を入力..." rows="3"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-cell-cancel" class="modal-btn cancel">キャンセル</button>
+          <button id="btn-cell-save" class="modal-btn save">OK</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 記録成功トースト -->
     <div id="toast" class="toast hidden">
