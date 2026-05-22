@@ -158,6 +158,97 @@ app.get('/api/stats/monthly', async (req, res) => {
   }
 });
 
+// ==================== SCHEDULE API ====================
+
+// 週間スケジュール取得
+app.get('/api/schedule', async (req, res) => {
+  try {
+    const week = req.query.week;
+    if (!week) return res.status(400).json({ success: false, error: 'week parameter required' });
+    const record = await queryOne('SELECT * FROM weekly_schedules WHERE week_start = ?', [week]);
+    if (record) {
+      res.json({ success: true, schedule: { ...record, schedule_data: JSON.parse(record.schedule_data || '{}') } });
+    } else {
+      res.json({ success: true, schedule: null });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 週間スケジュール保存
+app.put('/api/schedule', async (req, res) => {
+  try {
+    const { week_start, schedule_data, photo } = req.body;
+    if (!week_start) return res.status(400).json({ success: false, error: 'week_start required' });
+    const existing = await queryOne('SELECT * FROM weekly_schedules WHERE week_start = ?', [week_start]);
+    const dataStr = JSON.stringify(schedule_data || {});
+    if (existing) {
+      const newPhoto = photo !== undefined ? photo : existing.photo;
+      await execute('UPDATE weekly_schedules SET schedule_data = ?, photo = ?, updated_at = datetime("now", "localtime") WHERE week_start = ?',
+        [dataStr, newPhoto, week_start]);
+    } else {
+      await execute('INSERT INTO weekly_schedules (week_start, schedule_data, photo) VALUES (?, ?, ?)',
+        [week_start, dataStr, photo || null]);
+    }
+    res.json({ success: true, message: 'スケジュールを保存しました' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 仕込予定取得
+app.get('/api/brew-schedules', async (req, res) => {
+  try {
+    const items = await queryAll('SELECT * FROM brew_schedules ORDER BY row_order ASC');
+    res.json({ success: true, items });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 仕込予定一括保存
+app.put('/api/brew-schedules', async (req, res) => {
+  try {
+    const { items } = req.body;
+    await execute('DELETE FROM brew_schedules');
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      await execute('INSERT INTO brew_schedules (row_order, brew_date, beer_type, brew_number, color) VALUES (?, ?, ?, ?, ?)',
+        [i, it.brew_date || null, it.beer_type || null, it.brew_number || null, it.color || '#f5c542']);
+    }
+    res.json({ success: true, message: '仕込予定を保存しました' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 濾過火入れ予定取得
+app.get('/api/filtration-schedules', async (req, res) => {
+  try {
+    const items = await queryAll('SELECT * FROM filtration_schedules ORDER BY row_order ASC');
+    res.json({ success: true, items });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 濾過火入れ予定一括保存
+app.put('/api/filtration-schedules', async (req, res) => {
+  try {
+    const { items } = req.body;
+    await execute('DELETE FROM filtration_schedules');
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      await execute('INSERT INTO filtration_schedules (row_order, beer_type, brew_number, filtration_date, note, color) VALUES (?, ?, ?, ?, ?, ?)',
+        [i, it.beer_type || null, it.brew_number || null, it.filtration_date || null, it.note || null, it.color || '#f5c542']);
+    }
+    res.json({ success: true, message: '濾過予定を保存しました' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==================== HELPERS ====================
 function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
