@@ -39,8 +39,17 @@
       <span id="status-timer"></span>
     </div>
 
-    <!-- メイン画面: 大項目選択 -->
     <main id="view-main" class="view active">
+      <!-- 期限付きタスクカウントダウン -->
+      <div id="deadline-section" class="deadline-section hidden">
+        <div class="deadline-header">
+          <span class="deadline-title">⏳ 期限付きタスク</span>
+          <button id="btn-add-task" class="deadline-add-btn">＋</button>
+        </div>
+        <div id="deadline-list" class="deadline-list">
+          <!-- JSで動的生成 -->
+        </div>
+      </div>
       <div class="category-grid" id="category-grid">
         <!-- JSで動的生成 -->
       </div>
@@ -219,6 +228,31 @@
         <div class="modal-actions">
           <button id="btn-cell-cancel" class="modal-btn cancel">キャンセル</button>
           <button id="btn-cell-save" class="modal-btn save">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- タスク追加/編集モーダル -->
+    <div id="task-modal" class="modal hidden">
+      <div class="modal-backdrop task-modal-backdrop"></div>
+      <div class="modal-content">
+        <h3 class="modal-title" id="task-modal-title">⏳ タスクを追加</h3>
+        <input type="hidden" id="task-edit-id">
+        <div class="modal-field">
+          <label for="task-input-title">タスク内容</label>
+          <input type="text" id="task-input-title" class="time-input" placeholder="例: ラベルデザイン完成">
+        </div>
+        <div class="modal-field">
+          <label for="task-input-date">期日</label>
+          <input type="date" id="task-input-date" class="time-input">
+        </div>
+        <div class="modal-actions">
+          <button id="btn-task-cancel" class="modal-btn cancel">キャンセル</button>
+          <button id="btn-task-save" class="modal-btn save">保存</button>
+        </div>
+        <div id="task-modal-extra" class="task-modal-extra hidden">
+          <button id="btn-task-complete" class="modal-btn task-complete-btn">✅ 完了</button>
+          <button id="btn-task-delete" class="modal-btn delete">削除</button>
         </div>
       </div>
     </div>
