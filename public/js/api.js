@@ -73,5 +73,25 @@ const API = {
 
   saveFiltrationSchedules(items) {
     return this.request('PUT', '/api/filtration-schedules', { items });
+  },
+
+  getTasks() {
+    return this.request('GET', '/api/tasks');
+  },
+
+  createTask(title, deadline_date) {
+    return this.request('POST', '/api/tasks', { title, deadline_date });
+  },
+
+  updateTask(id, title, deadline_date) {
+    return this.request('PUT', `/api/tasks/${id}`, { title, deadline_date });
+  },
+
+  completeTask(id) {
+    return this.request('PUT', `/api/tasks/${id}/complete`);
+  },
+
+  deleteTask(id) {
+    return this.request('DELETE', `/api/tasks/${id}`);
   }
 };
