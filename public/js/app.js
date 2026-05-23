@@ -986,7 +986,7 @@
     // Bottom actions
     $('#btn-timeline').addEventListener('click', () => showTimeline());
     $('#btn-schedule').addEventListener('click', () => showSchedule());
-    $('#btn-dashboard').addEventListener('click', () => showDashboard());
+    $('#btn-add-task-bottom').addEventListener('click', () => openTaskModal(null));
     $('#btn-end-work').addEventListener('click', () => endWork());
 
     // Timeline date change
