@@ -185,7 +185,7 @@ app.put('/api/schedule', async (req, res) => {
     const dataStr = JSON.stringify(schedule_data || {});
     if (existing) {
       const newPhoto = photo !== undefined ? photo : existing.photo;
-      await execute('UPDATE weekly_schedules SET schedule_data = ?, photo = ?, updated_at = datetime("now", "localtime") WHERE week_start = ?',
+      await execute(`UPDATE weekly_schedules SET schedule_data = ?, photo = ?, updated_at = datetime('now','localtime') WHERE week_start = ?`,
         [dataStr, newPhoto, week_start]);
     } else {
       await execute('INSERT INTO weekly_schedules (week_start, schedule_data, photo) VALUES (?, ?, ?)',
