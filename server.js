@@ -249,6 +249,61 @@ app.put('/api/filtration-schedules', async (req, res) => {
   }
 });
 
+// ==================== DEADLINE TASKS API ====================
+
+// タスク一覧取得（未完了のみ）
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const items = await queryAll('SELECT * FROM deadline_tasks WHERE completed = 0 ORDER BY deadline_date ASC');
+    res.json({ success: true, items });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// タスク作成
+app.post('/api/tasks', async (req, res) => {
+  try {
+    const { title, deadline_date } = req.body;
+    if (!title || !deadline_date) return res.status(400).json({ success: false, error: 'title and deadline_date required' });
+    const result = await execute('INSERT INTO deadline_tasks (title, deadline_date) VALUES (?, ?)', [title, deadline_date]);
+    res.json({ success: true, id: result.lastId });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// タスク更新
+app.put('/api/tasks/:id', async (req, res) => {
+  try {
+    const { title, deadline_date } = req.body;
+    await execute('UPDATE deadline_tasks SET title = ?, deadline_date = ? WHERE id = ?', [title, deadline_date, req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// タスク完了
+app.put('/api/tasks/:id/complete', async (req, res) => {
+  try {
+    await execute('UPDATE deadline_tasks SET completed = 1 WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// タスク削除
+app.delete('/api/tasks/:id', async (req, res) => {
+  try {
+    await execute('DELETE FROM deadline_tasks WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==================== HELPERS ====================
 function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
