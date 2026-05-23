@@ -5,8 +5,22 @@ const API = {
   async request(method, path, body = null) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(this.base + path, opts);
-    return res.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    opts.signal = controller.signal;
+    try {
+      const res = await fetch(this.base + path, opts);
+      clearTimeout(timeout);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') throw new Error('リクエストがタイムアウトしました');
+      throw e;
+    }
   },
 
   createRecord(category, subcategory, color, note) {
