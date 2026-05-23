@@ -57,6 +57,7 @@
     updateClock();
     setInterval(updateClock, 1000);
     checkCurrentWork();
+    loadDeadlineTasks();
     bindEvents();
     // Set today's date for timeline picker
     $('#timeline-date').value = todayStr();
@@ -615,6 +616,151 @@
     }
   }
 
+  // ===== Deadline Tasks =====
+  let deadlineTasks = [];
+
+  async function loadDeadlineTasks() {
+    try {
+      const res = await API.getTasks();
+      if (res.success) deadlineTasks = res.items || [];
+      renderDeadlineTasks();
+    } catch (e) {
+      console.error('loadDeadlineTasks error:', e);
+    }
+  }
+
+  function renderDeadlineTasks() {
+    const section = $('#deadline-section');
+    const list = $('#deadline-list');
+    if (deadlineTasks.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    list.innerHTML = deadlineTasks.map(task => {
+      // 前日基準のカウントダウン
+      const deadline = new Date(task.deadline_date + 'T00:00:00');
+      const targetDate = new Date(deadline);
+      targetDate.setDate(targetDate.getDate() - 1); // 前日
+      const diffMs = targetDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      let countdownText, colorClass, urgent = '';
+      if (diffDays > 3) {
+        countdownText = `${diffDays}`;
+        colorClass = 'green';
+      } else if (diffDays > 0) {
+        countdownText = `${diffDays}`;
+        colorClass = 'yellow';
+      } else if (diffDays === 0) {
+        countdownText = '前日';
+        colorClass = 'red';
+        urgent = ' pulse-urgent';
+      } else {
+        countdownText = `${Math.abs(diffDays)}`;
+        colorClass = 'red';
+        urgent = ' pulse-urgent';
+      }
+
+      const unitText = diffDays > 0 ? '日前' : (diffDays === 0 ? '' : '日超過');
+
+      const dlMonth = deadline.getMonth() + 1;
+      const dlDay = deadline.getDate();
+      const dayNames = ['日','月','火','水','木','金','土'];
+      const dlDow = dayNames[deadline.getDay()];
+
+      return `
+        <div class="dl-card" data-task-id="${task.id}">
+          <div class="dl-countdown ${colorClass}${urgent}">
+            ${countdownText}<span class="dl-unit">${unitText}</span>
+          </div>
+          <div class="dl-info">
+            <div class="dl-task-title">${task.title}</div>
+            <div class="dl-date">期日: ${dlMonth}/${dlDay}(${dlDow})</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openTaskModal(taskId) {
+    if (taskId) {
+      const task = deadlineTasks.find(t => String(t.id) === String(taskId));
+      if (!task) return;
+      $('#task-modal-title').textContent = '✒️ タスクを編集';
+      $('#task-edit-id').value = task.id;
+      $('#task-input-title').value = task.title;
+      $('#task-input-date').value = task.deadline_date;
+      $('#task-modal-extra').classList.remove('hidden');
+    } else {
+      $('#task-modal-title').textContent = '⏳ タスクを追加';
+      $('#task-edit-id').value = '';
+      $('#task-input-title').value = '';
+      $('#task-input-date').value = '';
+      $('#task-modal-extra').classList.add('hidden');
+    }
+    $('#task-modal').classList.remove('hidden');
+    setTimeout(() => $('#task-input-title').focus(), 100);
+  }
+
+  function closeTaskModal() {
+    $('#task-modal').classList.add('hidden');
+  }
+
+  async function saveTask() {
+    const title = $('#task-input-title').value.trim();
+    const date = $('#task-input-date').value;
+    if (!title || !date) {
+      showToast('タスク内容と期日を入力してください');
+      return;
+    }
+    try {
+      const editId = $('#task-edit-id').value;
+      if (editId) {
+        await API.updateTask(editId, title, date);
+        showToast('タスクを更新しました');
+      } else {
+        await API.createTask(title, date);
+        showToast('タスクを追加しました');
+      }
+      closeTaskModal();
+      await loadDeadlineTasks();
+    } catch (e) {
+      showToast('保存失敗: ' + (e.message || ''));
+    }
+  }
+
+  async function completeTask() {
+    const id = $('#task-edit-id').value;
+    if (!id) return;
+    try {
+      await API.completeTask(id);
+      showToast('タスクを完了しました 🎉');
+      closeTaskModal();
+      await loadDeadlineTasks();
+    } catch (e) {
+      showToast('エラー: ' + (e.message || ''));
+    }
+  }
+
+  async function deleteTask() {
+    const id = $('#task-edit-id').value;
+    if (!id) return;
+    showConfirm('このタスクを削除しますか？', async () => {
+      try {
+        await API.deleteTask(id);
+        showToast('タスクを削除しました');
+        closeTaskModal();
+        await loadDeadlineTasks();
+      } catch (e) {
+        showToast('エラー: ' + (e.message || ''));
+      }
+    });
+  }
+
   // ===== Color Picker =====
   function showColorPicker(dotEl, items, idx) {
     const existing = document.querySelector('.color-picker-overlay');
@@ -893,6 +1039,18 @@
 
     // Dashboard month change
     $('#dashboard-month').addEventListener('change', () => loadDashboard('monthly'));
+
+    // ===== Task Events =====
+    $('#btn-add-task').addEventListener('click', () => openTaskModal(null));
+    $('#btn-task-cancel').addEventListener('click', closeTaskModal);
+    $('.task-modal-backdrop').addEventListener('click', closeTaskModal);
+    $('#btn-task-save').addEventListener('click', saveTask);
+    $('#btn-task-complete').addEventListener('click', completeTask);
+    $('#btn-task-delete').addEventListener('click', deleteTask);
+    $('#deadline-list').addEventListener('click', (e) => {
+      const card = e.target.closest('.dl-card');
+      if (card) openTaskModal(card.dataset.taskId);
+    });
 
     // ===== Schedule Events =====
     // Tab switching
