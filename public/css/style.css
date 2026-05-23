@@ -500,3 +500,67 @@ input { font-family: inherit; }
   position: fixed; inset: 0; z-index: 255; background: transparent;
 }
 
+/* ===== Deadline Tasks ===== */
+.deadline-section {
+  margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,193,7,0.2);
+  background: rgba(255,193,7,0.05);
+  padding: 12px;
+}
+.deadline-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.deadline-title {
+  font-size: 0.85rem; font-weight: 700; color: #ffc107;
+}
+.deadline-add-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(255,193,7,0.15); color: #ffc107;
+  font-size: 1.2rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+.deadline-add-btn:active { transform: scale(0.9); }
+.deadline-list { display: flex; flex-direction: column; gap: 8px; }
+
+.dl-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  cursor: pointer; transition: var(--transition);
+}
+.dl-card:active { transform: scale(0.98); }
+.dl-countdown {
+  min-width: 52px; padding: 6px 8px; border-radius: 8px;
+  text-align: center; font-weight: 800; font-size: 0.9rem;
+  line-height: 1.1;
+}
+.dl-countdown .dl-unit {
+  font-size: 0.6rem; font-weight: 500; display: block; margin-top: 2px;
+}
+.dl-countdown.green { background: rgba(76,175,80,0.15); color: #66bb6a; }
+.dl-countdown.yellow { background: rgba(255,193,7,0.15); color: #ffc107; }
+.dl-countdown.red { background: rgba(239,83,80,0.15); color: #ef5350; }
+.dl-countdown.red.pulse-urgent { animation: pulseUrgent 1.5s infinite; }
+@keyframes pulseUrgent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.dl-info { flex: 1; min-width: 0; }
+.dl-info .dl-task-title {
+  font-size: 0.85rem; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dl-info .dl-date {
+  font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;
+}
+.task-modal-extra {
+  display: flex; gap: 8px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+.task-modal-extra .modal-btn { flex: 1; }
+.task-complete-btn {
+  background: rgba(76,175,80,0.15) !important; color: #66bb6a !important;
+}
