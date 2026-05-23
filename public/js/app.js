@@ -480,9 +480,15 @@
     try {
       const photo = schedPhotoChanged ? (schedPhotoData || null) : undefined;
       const res = await API.saveSchedule(currentWeekStart, weeklyData, photo);
-      if (res.success) showToast('スケジュールを保存しました');
+      if (res.success) {
+        showToast('スケジュールを保存しました');
+        schedPhotoChanged = false;
+      } else {
+        showToast(res.error || '保存に失敗しました');
+      }
     } catch (e) {
-      showToast('保存に失敗しました');
+      console.error('saveWeeklySchedule error:', e);
+      showToast('保存失敗: ' + (e.message || '不明なエラー'));
     }
   }
 
@@ -533,12 +539,17 @@
   }
 
   async function saveBrewSchedules() {
-    collectBrewData();
     try {
+      collectBrewData();
       const res = await API.saveBrewSchedules(brewItems);
-      if (res.success) showToast('仕込予定を保存しました');
+      if (res.success) {
+        showToast('仕込予定を保存しました');
+      } else {
+        showToast(res.error || '保存に失敗しました');
+      }
     } catch (e) {
-      showToast('保存に失敗しました');
+      console.error('saveBrewSchedules error:', e);
+      showToast('保存失敗: ' + (e.message || '不明なエラー'));
     }
   }
 
@@ -590,12 +601,17 @@
   }
 
   async function saveFiltrationSchedules() {
-    collectFiltrationData();
     try {
+      collectFiltrationData();
       const res = await API.saveFiltrationSchedules(filtrationItems);
-      if (res.success) showToast('濾過予定を保存しました');
+      if (res.success) {
+        showToast('濾過予定を保存しました');
+      } else {
+        showToast(res.error || '保存に失敗しました');
+      }
     } catch (e) {
-      showToast('保存に失敗しました');
+      console.error('saveFiltrationSchedules error:', e);
+      showToast('保存失敗: ' + (e.message || '不明なエラー'));
     }
   }
 
