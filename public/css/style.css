@@ -367,6 +367,7 @@ input { font-family: inherit; }
 
 /* ===== Schedule Button ===== */
 .schedule-btn { background: rgba(76,175,80,0.12); color: #66bb6a; }
+.task-add-action-btn { background: rgba(255,193,7,0.12); color: #ffc107; }
 
 /* ===== Schedule View ===== */
 .schedule-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
