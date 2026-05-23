@@ -89,6 +89,15 @@ async function initDb() {
       updated_at TEXT DEFAULT (datetime('now', 'localtime'))
     )
   `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS deadline_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      deadline_date TEXT NOT NULL,
+      completed INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
   console.log(`📦 DB接続: ${isProduction ? 'Turso Cloud' : 'ローカルファイル'}`);
 }
 
