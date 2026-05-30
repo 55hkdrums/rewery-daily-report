@@ -305,14 +305,21 @@ app.delete('/api/tasks/:id', async (req, res) => {
 });
 
 // ==================== HELPERS ====================
+function toJST(d) {
+  // UTC→JST(+9h)に変換
+  return new Date(d.getTime() + 9 * 60 * 60 * 1000);
+}
 function formatDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const j = toJST(d);
+  return `${j.getUTCFullYear()}-${String(j.getUTCMonth()+1).padStart(2,'0')}-${String(j.getUTCDate()).padStart(2,'0')}`;
 }
 function formatTime(d) {
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const j = toJST(d);
+  return `${String(j.getUTCHours()).padStart(2,'0')}:${String(j.getUTCMinutes()).padStart(2,'0')}`;
 }
 function formatMonth(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const j = toJST(d);
+  return `${j.getUTCFullYear()}-${String(j.getUTCMonth()+1).padStart(2,'0')}`;
 }
 function calcDuration(startStr, endStr) {
   const [sh,sm] = startStr.split(':').map(Number);
@@ -328,6 +335,6 @@ app.get('*', (req, res) => {
 (async () => {
   await initDb();
   app.listen(PORT, () => {
-    console.log(`🍺 醸造所日報アプリ起動中: http://localhost:${PORT}`);
+    console.log(`📋 業務日報アプリ起動中: http://localhost:${PORT}`);
   });
 })();
