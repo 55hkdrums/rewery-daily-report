@@ -430,16 +430,24 @@
   }
 
   function renderWeeklyGrid() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const headers = DAYS.map((day, i) => {
       const d = addDays(currentWeekStart, i);
-      return `<th>${d.getDate()}${DAY_LABELS[i]}</th>`;
+      const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+      const cls = isToday ? ' class="today-col"' : '';
+      return `<th${cls}>${d.getDate()}${DAY_LABELS[i]}</th>`;
     }).join('');
 
     const periods = ['AM','PM'];
     const rows = periods.map(p => {
-      const cells = DAYS.map(day => {
+      const cells = DAYS.map((day, i) => {
+        const d = addDays(currentWeekStart, i);
+        const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
         const val = (weeklyData[day] && weeklyData[day][p.toLowerCase()]) || '';
-        const cls = val ? 'grid-cell has-content' : 'grid-cell';
+        let cls = val ? 'grid-cell has-content' : 'grid-cell';
+        if (isToday) cls += ' today-col';
         return `<td class="${cls}" data-day="${day}" data-period="${p.toLowerCase()}">${val}</td>`;
       }).join('');
       return `<tr><td class="period-label">${p}</td>${cells}</tr>`;
