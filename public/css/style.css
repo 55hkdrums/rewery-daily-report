@@ -425,6 +425,9 @@ input { font-family: inherit; }
 }
 .weekly-table td.grid-cell:active { background: var(--bg-elevated); }
 .weekly-table td.grid-cell.has-content { color: #66bb6a; }
+.weekly-table th.today-col { background: rgba(255,193,7,0.2); color: #ffc107; }
+.weekly-table td.today-col { background: rgba(255,193,7,0.08); }
+.weekly-table td.grid-cell.today-col:active { background: rgba(255,193,7,0.18); }
 
 /* Editable List (Brew / Filtration) */
 .editable-list { display: flex; flex-direction: column; gap: 8px; }
