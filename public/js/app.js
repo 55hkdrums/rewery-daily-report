@@ -440,6 +440,7 @@
       return `<th${cls}>${d.getDate()}${DAY_LABELS[i]}</th>`;
     }).join('');
 
+    // 1. 製造日程 (AM/PM)
     const periods = ['AM','PM'];
     const rows = periods.map(p => {
       const cells = DAYS.map((day, i) => {
@@ -459,12 +460,55 @@
         <tbody>${rows}</tbody>
       </table>
     `;
+
+    // 2. 仕込予定
+    const brewCells = DAYS.map((day, i) => {
+      const d = addDays(currentWeekStart, i);
+      const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+      const val = (weeklyData[day] && weeklyData[day]['brew']) || '';
+      let cls = val ? 'grid-cell has-content' : 'grid-cell';
+      if (isToday) cls += ' today-col';
+      return `<td class="${cls}" data-day="${day}" data-period="brew">${val}</td>`;
+    }).join('');
+
+    $('#brew-grid').innerHTML = `
+      <table class="weekly-table">
+        <thead><tr><th></th>${headers}</tr></thead>
+        <tbody>
+          <tr><td class="period-label" style="font-size:0.7rem; width:36px;">仕込</td>${brewCells}</tr>
+        </tbody>
+      </table>
+    `;
+
+    // 3. 濾過火入れ
+    const filtCells = DAYS.map((day, i) => {
+      const d = addDays(currentWeekStart, i);
+      const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+      const val = (weeklyData[day] && weeklyData[day]['filtration']) || '';
+      let cls = val ? 'grid-cell has-content' : 'grid-cell';
+      if (isToday) cls += ' today-col';
+      return `<td class="${cls}" data-day="${day}" data-period="filtration">${val}</td>`;
+    }).join('');
+
+    $('#filtration-grid').innerHTML = `
+      <table class="weekly-table">
+        <thead><tr><th></th>${headers}</tr></thead>
+        <tbody>
+          <tr><td class="period-label" style="font-size:0.7rem; width:36px;">濾過</td>${filtCells}</tr>
+        </tbody>
+      </table>
+    `;
   }
 
   function openCellEdit(day, period) {
     const dayIdx = DAYS.indexOf(day);
     const d = addDays(currentWeekStart, dayIdx);
-    const label = `${d.getMonth()+1}/${d.getDate()}(${DAY_LABELS[dayIdx]}) ${period.toUpperCase()}`;
+    
+    let periodLabel = period.toUpperCase();
+    if (period === 'brew') periodLabel = '仕込予定';
+    if (period === 'filtration') periodLabel = '濾過火入れ';
+
+    const label = `${d.getMonth()+1}/${d.getDate()}(${DAY_LABELS[dayIdx]}) ${periodLabel}`;
     $('#cell-edit-day').value = day;
     $('#cell-edit-period').value = period;
     $('#cell-edit-label').textContent = label;
@@ -501,128 +545,7 @@
     }
   }
 
-  // ===== Brew Schedule =====
-  let brewItems = [];
 
-  async function loadBrewSchedules() {
-    try {
-      const res = await API.getBrewSchedules();
-      if (res.success) brewItems = res.items || [];
-      renderBrewList();
-    } catch (e) {
-      showToast('仕込予定の読み込みに失敗');
-    }
-  }
-
-  function renderBrewList() {
-    $('#brew-list').innerHTML = brewItems.map((it, i) => `
-      <div class="el-row" data-idx="${i}">
-        <div class="el-num">${i + 1}</div>
-        <div class="el-fields">
-          <div class="el-field-row">
-            <div class="el-color-dot brew-color-dot" data-idx="${i}" style="background:${it.color || '#f5c542'}"></div>
-            <input class="el-input" data-field="beer_type" placeholder="液種" value="${it.beer_type || ''}">
-            <input class="el-input short" data-field="brew_number" placeholder="仕込 No." value="${it.brew_number || ''}">
-          </div>
-          <div class="el-field-row">
-            <input class="el-input medium" type="date" data-field="brew_date" value="${it.brew_date || ''}">
-          </div>
-        </div>
-        <button class="el-delete-btn" data-idx="${i}">✕</button>
-      </div>
-    `).join('') || '<div class="timeline-empty">仕込予定がありません</div>';
-  }
-
-  function addBrewRow() {
-    brewItems.push({ brew_date: '', beer_type: '', brew_number: '', color: '#f5c542' });
-    renderBrewList();
-  }
-
-  function collectBrewData() {
-    const rows = $$('#brew-list .el-row');
-    rows.forEach((row, i) => {
-      row.querySelectorAll('.el-input').forEach(inp => {
-        brewItems[i][inp.dataset.field] = inp.value;
-      });
-    });
-  }
-
-  async function saveBrewSchedules() {
-    try {
-      collectBrewData();
-      const res = await API.saveBrewSchedules(brewItems);
-      if (res.success) {
-        showToast('仕込予定を保存しました');
-      } else {
-        showToast(res.error || '保存に失敗しました');
-      }
-    } catch (e) {
-      console.error('saveBrewSchedules error:', e);
-      showToast('保存失敗: ' + (e.message || '不明なエラー'));
-    }
-  }
-
-  // ===== Filtration Schedule =====
-  let filtrationItems = [];
-
-  async function loadFiltrationSchedules() {
-    try {
-      const res = await API.getFiltrationSchedules();
-      if (res.success) filtrationItems = res.items || [];
-      renderFiltrationList();
-    } catch (e) {
-      showToast('濾過予定の読み込みに失敗');
-    }
-  }
-
-  function renderFiltrationList() {
-    $('#filtration-list').innerHTML = filtrationItems.map((it, i) => `
-      <div class="el-row" data-idx="${i}">
-        <div class="el-num">${i + 1}</div>
-        <div class="el-fields">
-          <div class="el-field-row">
-            <div class="el-color-dot filt-color-dot" data-idx="${i}" style="background:${it.color || '#f5c542'}"></div>
-            <input class="el-input" data-field="beer_type" placeholder="液種" value="${it.beer_type || ''}">
-            <input class="el-input short" data-field="brew_number" placeholder="仕込 No." value="${it.brew_number || ''}">
-          </div>
-          <div class="el-field-row">
-            <input class="el-input medium" type="date" data-field="filtration_date" value="${it.filtration_date || ''}">
-            <input class="el-input" data-field="note" placeholder="備考" value="${it.note || ''}">
-          </div>
-        </div>
-        <button class="el-delete-btn" data-idx="${i}">✕</button>
-      </div>
-    `).join('') || '<div class="timeline-empty">濾過予定がありません</div>';
-  }
-
-  function addFiltrationRow() {
-    filtrationItems.push({ beer_type: '', brew_number: '', filtration_date: '', note: '', color: '#f5c542' });
-    renderFiltrationList();
-  }
-
-  function collectFiltrationData() {
-    const rows = $$('#filtration-list .el-row');
-    rows.forEach((row, i) => {
-      row.querySelectorAll('.el-input').forEach(inp => {
-        filtrationItems[i][inp.dataset.field] = inp.value;
-      });
-    });
-  }
-
-  async function saveFiltrationSchedules() {
-    try {
-      collectFiltrationData();
-      const res = await API.saveFiltrationSchedules(filtrationItems);
-      if (res.success) {
-        showToast('濾過予定を保存しました');
-      } else {
-        showToast(res.error || '保存に失敗しました');
-      }
-    } catch (e) {
-      console.error('saveFiltrationSchedules error:', e);
-      showToast('保存失敗: ' + (e.message || '不明なエラー'));
-    }
-  }
 
   // ===== Deadline Tasks =====
   let deadlineTasks = [];
@@ -1061,19 +984,6 @@
     });
 
     // ===== Schedule Events =====
-    // Tab switching
-    $$('.sched-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        $$('.sched-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        $$('.sched-panel').forEach(p => p.classList.remove('active'));
-        const panel = tab.dataset.stab;
-        $(`#sched-${panel}`).classList.add('active');
-        if (panel === 'brew') loadBrewSchedules();
-        if (panel === 'filtration') loadFiltrationSchedules();
-      });
-    });
-
     // Week navigation
     $('#btn-week-prev').addEventListener('click', () => {
       currentWeekStart = formatDateLocal(addDays(currentWeekStart, -7));
@@ -1085,10 +995,13 @@
     });
 
     // Grid cell click
-    $('#weekly-grid').addEventListener('click', (e) => {
+    const handleGridClick = (e) => {
       const cell = e.target.closest('.grid-cell');
       if (cell) openCellEdit(cell.dataset.day, cell.dataset.period);
-    });
+    };
+    $('#weekly-grid').addEventListener('click', handleGridClick);
+    $('#brew-grid').addEventListener('click', handleGridClick);
+    $('#filtration-grid').addEventListener('click', handleGridClick);
 
     // Cell edit modal
     $('#btn-cell-cancel').addEventListener('click', closeCellEdit);
@@ -1114,42 +1027,6 @@
       schedPhotoChanged = true;
       $('#sched-photo-preview').classList.add('hidden');
       $('#sched-photo-input').value = '';
-    });
-
-    // Brew list events
-    $('#btn-brew-add').addEventListener('click', addBrewRow);
-    $('#btn-save-brew').addEventListener('click', saveBrewSchedules);
-    $('#brew-list').addEventListener('click', (e) => {
-      const delBtn = e.target.closest('.el-delete-btn');
-      if (delBtn) {
-        collectBrewData();
-        brewItems.splice(parseInt(delBtn.dataset.idx), 1);
-        renderBrewList();
-        return;
-      }
-      const colorDot = e.target.closest('.brew-color-dot');
-      if (colorDot) {
-        collectBrewData();
-        showColorPicker(colorDot, brewItems, parseInt(colorDot.dataset.idx));
-      }
-    });
-
-    // Filtration list events
-    $('#btn-filtration-add').addEventListener('click', addFiltrationRow);
-    $('#btn-save-filtration').addEventListener('click', saveFiltrationSchedules);
-    $('#filtration-list').addEventListener('click', (e) => {
-      const delBtn = e.target.closest('.el-delete-btn');
-      if (delBtn) {
-        collectFiltrationData();
-        filtrationItems.splice(parseInt(delBtn.dataset.idx), 1);
-        renderFiltrationList();
-        return;
-      }
-      const colorDot = e.target.closest('.filt-color-dot');
-      if (colorDot) {
-        collectFiltrationData();
-        showColorPicker(colorDot, filtrationItems, parseInt(colorDot.dataset.idx));
-      }
     });
   }
 
