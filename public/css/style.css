@@ -568,3 +568,14 @@ input { font-family: inherit; }
 .task-complete-btn {
   background: rgba(76,175,80,0.15) !important; color: #66bb6a !important;
 }
+
+/* Schedule section title */
+.schedule-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  padding-left: 8px;
+  border-left: 3px solid var(--cat-beer, #f5c542);
+}
+
