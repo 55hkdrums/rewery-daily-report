@@ -38,6 +38,9 @@
   let timerInterval = null;
   let currentWorkStart = null;
 
+  // ===== Coworkers =====
+  const COWORKERS = ['部長', '藤森', '宮澤', '工藤', '百瀬', '松倉', '野口', '志賀', '林(麗)', '野明', '高木'];
+
   // ===== DOM References =====
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -58,6 +61,7 @@
     setInterval(updateClock, 1000);
     checkCurrentWork();
     loadDeadlineTasks();
+    loadTransferDays();
     bindEvents();
     // Set today's date for timeline picker
     $('#timeline-date').value = todayStr();
@@ -69,12 +73,15 @@
     views[name].classList.add('active');
     currentView = name;
     const backBtn = $('#btn-back');
+    const transferBtn = $('#btn-transfer-days');
     if (name === 'main') {
       backBtn.classList.add('hidden');
-      $('#header-title').textContent = '🍺 醸造日報';
+      if (transferBtn) transferBtn.classList.remove('hidden');
+      $('#header-title').textContent = '📋 業務日報';
     } else {
       backBtn.classList.remove('hidden');
-      $('#header-title').textContent = title || '🍺 醸造日報';
+      if (transferBtn) transferBtn.classList.add('hidden');
+      $('#header-title').textContent = title || '📋 業務日報';
     }
   }
 
@@ -105,9 +112,9 @@
   }
 
   // ===== Record Work =====
-  async function recordWork(category, subcategory, color, note) {
+  async function recordWork(category, subcategory, color, note, coWorkers) {
     try {
-      const res = await API.createRecord(category, subcategory, color, note);
+      const res = await API.createRecord(category, subcategory, color, note, coWorkers);
       if (res.success) {
         showToast(res.message);
         showView('main');
@@ -118,14 +125,28 @@
     }
   }
 
-  // ===== Note Input Dialog =====
+  // ===== Note & Coworker Input Dialog =====
   function showNoteDialog(category, subcategory, color) {
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
+
+    const coworkerBtns = COWORKERS.map(name => `
+      <button type="button" class="coworker-btn" data-name="${name}">${name}</button>
+    `).join('');
+
     overlay.innerHTML = `
-      <div class="confirm-box note-dialog">
+      <div class="confirm-box note-dialog modal-content-scroll" style="max-height: 85vh; overflow-y: auto;">
         <p class="note-dialog-title">📝 ${subcategory}</p>
-        <p class="note-dialog-subtitle">メモを入力しますか？</p>
+        
+        <div class="dialog-field" style="margin-top: 12px; text-align: left;">
+          <label class="dialog-label" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 6px;">👥 同行者 (複数選択可)</label>
+          <div class="coworker-selector-grid">
+            ${coworkerBtns}
+          </div>
+          <input type="text" class="coworker-custom-input" placeholder="手入力欄（その他同行者など）..." style="width: 100%; margin-top: 8px; padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-elevated); color: var(--text-primary); font-size: 0.85rem;">
+        </div>
+
+        <p class="note-dialog-subtitle" style="margin-top: 15px; margin-bottom: 5px;">メモを入力しますか？</p>
         <div class="note-toggle-wrap">
           <button class="note-toggle-btn active" data-mode="skip">入力しない</button>
           <button class="note-toggle-btn" data-mode="input">入力する</button>
@@ -133,13 +154,20 @@
         <div class="note-input-wrap hidden">
           <textarea class="note-textarea" placeholder="メモを入力..." rows="3"></textarea>
         </div>
-        <div class="confirm-actions">
+        <div class="confirm-actions" style="margin-top: 20px;">
           <button class="confirm-btn confirm-cancel">キャンセル</button>
           <button class="confirm-btn confirm-ok note-ok-btn">記録する</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
+
+    // 同行者選択のトグル
+    overlay.querySelectorAll('.coworker-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+      });
+    });
 
     const skipBtn = overlay.querySelector('[data-mode="skip"]');
     const inputBtn = overlay.querySelector('[data-mode="input"]');
@@ -160,9 +188,17 @@
 
     overlay.querySelector('.confirm-cancel').onclick = () => overlay.remove();
     overlay.querySelector('.note-ok-btn').onclick = () => {
+      // 選択された同行者
+      const selected = Array.from(overlay.querySelectorAll('.coworker-btn.active')).map(btn => btn.dataset.name);
+      // 手入力
+      const customVal = overlay.querySelector('.coworker-custom-input').value.trim();
+      if (customVal) selected.push(customVal);
+
+      const coWorkers = selected.length > 0 ? selected.join(', ') : null;
       const note = inputBtn.classList.contains('active') ? textarea.value.trim() || null : null;
+
       overlay.remove();
-      recordWork(category, subcategory, color, note);
+      recordWork(category, subcategory, color, note, coWorkers);
     };
   }
 
@@ -227,13 +263,15 @@
         const timeText = r.end_time ? `${r.start_time} → ${r.end_time}` : `${r.start_time} →`;
         const noteHtml = r.note ? `<div class="tl-note">📝 ${r.note}</div>` : '';
         const photoHtml = r.photo ? `<div class="tl-photo"><img src="${r.photo}" alt="写真" class="tl-photo-thumb"></div>` : '';
+        const coworkersHtml = r.co_workers ? `<div class="tl-coworkers">👥 ${r.co_workers}</div>` : '';
         return `
-          <div class="timeline-item" data-id="${r.id}">
+          <div class="timeline-item" data-id="${r.id}" data-co-workers="${r.co_workers || ''}">
             <div class="tl-color" style="background:${r.color}"></div>
             <div class="tl-info">
               <div class="tl-category">${label}</div>
               <div class="tl-sub">${r.category}</div>
               ${noteHtml}
+              ${coworkersHtml}
               ${photoHtml}
               <div class="tl-time">${timeText}</div>
             </div>
@@ -250,11 +288,37 @@
   let editPhotoData = null; // null=変更なし, ''は削除, data:url=新写真
   let editPhotoChanged = false;
 
-  function openEditModal(recordId, startTime, endTime, note, photo) {
+  function openEditModal(recordId, startTime, endTime, note, photo, coWorkers) {
     $('#edit-record-id').value = recordId;
     $('#edit-start-time').value = startTime;
     $('#edit-end-time').value = endTime || '';
     $('#edit-note').value = note || '';
+
+    // 同行者トグルボタンを動的に生成＆初期選択状態を設定
+    const selector = $('#edit-coworker-selector');
+    const coworkerList = coWorkers ? coWorkers.split(',').map(s => s.trim()) : [];
+
+    const coworkerBtns = COWORKERS.map(name => {
+      const idx = coworkerList.indexOf(name);
+      const isActive = idx !== -1;
+      if (isActive) {
+        coworkerList.splice(idx, 1); // 検出したらリストから除外
+      }
+      const cls = isActive ? 'coworker-btn active' : 'coworker-btn';
+      return `<button type="button" class="${cls}" data-name="${name}">${name}</button>`;
+    }).join('');
+
+    selector.innerHTML = coworkerBtns;
+
+    // トグルイベントを登録
+    selector.querySelectorAll('.coworker-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+      });
+    });
+
+    // 残った同行者をカスタム手入力欄にセット
+    $('#edit-coworker-custom').value = coworkerList.join(', ');
 
     // 写真プレビュー
     editPhotoData = undefined; // undefined=変更なし
@@ -282,8 +346,19 @@
     const endTime = $('#edit-end-time').value || null;
     const note = $('#edit-note').value.trim() || null;
     const photo = editPhotoChanged ? (editPhotoData || null) : undefined;
+
+    // 同行者情報をマージして収集
+    const selected = Array.from($('#edit-coworker-selector').querySelectorAll('.coworker-btn.active')).map(btn => btn.dataset.name);
+    const customVal = $('#edit-coworker-custom').value.trim();
+    if (customVal) {
+      customVal.split(',').map(s => s.trim()).forEach(val => {
+        if (val && !selected.includes(val)) selected.push(val);
+      });
+    }
+    const coWorkers = selected.length > 0 ? selected.join(', ') : null;
+
     try {
-      const res = await API.updateRecord(id, startTime, endTime, note, photo);
+      const res = await API.updateRecord(id, startTime, endTime, note, photo, coWorkers);
       if (res.success) {
         showToast('修正しました');
         closeEditModal();
@@ -349,6 +424,64 @@
         showToast('削除に失敗しました');
       }
     });
+  }
+
+  // ===== Transfer Needed Days =====
+  let currentTransferDays = 0.0;
+
+  async function loadTransferDays() {
+    try {
+      const res = await API.getTransferDays();
+      if (res.success) {
+        currentTransferDays = res.value;
+        renderTransferDays();
+      }
+    } catch (e) {
+      console.error('loadTransferDays error:', e);
+    }
+  }
+
+  function renderTransferDays() {
+    const valEl = $('#transfer-days-value');
+    const labelEl = $('#transfer-days-label');
+    const btnEl = $('#btn-transfer-days');
+    if (!valEl || !labelEl) return;
+
+    if (currentTransferDays < 0) {
+      labelEl.textContent = '借金💦';
+      if (btnEl) btnEl.classList.add('debt');
+    } else {
+      labelEl.textContent = '振替必要日数';
+      if (btnEl) btnEl.classList.remove('debt');
+    }
+    valEl.textContent = `${currentTransferDays.toFixed(1)}日`;
+  }
+
+  function openTransferModal() {
+    $('#transfer-input-value').value = currentTransferDays.toFixed(1);
+    $('#transfer-modal').classList.remove('hidden');
+    setTimeout(() => $('#transfer-input-value').focus(), 100);
+  }
+  function closeTransferModal() {
+    $('#transfer-modal').classList.add('hidden');
+  }
+  async function saveTransferDays() {
+    const val = parseFloat($('#transfer-input-value').value);
+    if (isNaN(val)) {
+      showToast('正しい数値を入力してください');
+      return;
+    }
+    try {
+      const res = await API.saveTransferDays(val);
+      if (res.success) {
+        currentTransferDays = res.value;
+        renderTransferDays();
+        closeTransferModal();
+        showToast('振替必要日数を更新しました');
+      }
+    } catch (e) {
+      showToast('更新に失敗しました');
+    }
   }
 
   // ===== End Work =====
@@ -877,6 +1010,12 @@
 
   // ===== Event Bindings =====
   function bindEvents() {
+    // Transfer Needed Days
+    $('#btn-transfer-days').addEventListener('click', openTransferModal);
+    $('#btn-transfer-cancel').addEventListener('click', closeTransferModal);
+    $('#btn-transfer-save').addEventListener('click', saveTransferDays);
+    $('.transfer-modal-backdrop').addEventListener('click', closeTransferModal);
+
     // Back button
     $('#btn-back').addEventListener('click', () => {
       if (currentView === 'subcategory') showView('main');
@@ -890,11 +1029,9 @@
       const idx = parseInt(card.dataset.index);
       const cat = CATEGORIES[idx];
       if (cat.items.length === 0) {
-        // 直接記録（売店など）
-        recordWork(cat.name, null, cat.color);
+        showNoteDialog(cat.name, cat.name, cat.color);
       } else if (cat.items.length === 1) {
-        // 1つしかない場合も直接記録
-        recordWork(cat.name, cat.items[0], cat.color);
+        showNoteDialog(cat.name, cat.items[0], cat.color);
       } else {
         showSubcategory(idx);
       }
@@ -907,11 +1044,7 @@
       const catIdx = parseInt(btn.dataset.cat);
       const itemIdx = parseInt(btn.dataset.item);
       const cat = CATEGORIES[catIdx];
-      if (cat.hasNoteInput) {
-        showNoteDialog(cat.name, cat.items[itemIdx], cat.color);
-      } else {
-        recordWork(cat.name, cat.items[itemIdx], cat.color);
-      }
+      showNoteDialog(cat.name, cat.items[itemIdx], cat.color);
     });
 
     // Bottom actions
@@ -935,7 +1068,8 @@
       const note = noteEl ? noteEl.textContent.replace(/^📝\s*/, '') : '';
       const photoEl = item.querySelector('.tl-photo-thumb');
       const photo = photoEl ? photoEl.src : '';
-      openEditModal(id, parts[0], parts[1] || '', note, photo);
+      const coWorkers = item.dataset.coWorkers || '';
+      openEditModal(id, parts[0], parts[1] || '', note, photo, coWorkers);
     });
 
     // Edit modal
