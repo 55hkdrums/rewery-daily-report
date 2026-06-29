@@ -19,7 +19,7 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/records', async (req, res) => {
   try {
-    const { category, subcategory, color, note } = req.body;
+    const { category, subcategory, color, note, co_workers } = req.body;
     const now = new Date();
     const date = formatDate(now);
     const startTime = formatTime(now);
@@ -36,8 +36,8 @@ app.post('/api/records', async (req, res) => {
       closedPrevious = { id: openRecord.id, category: openRecord.category, subcategory: openRecord.subcategory, endTime: startTime };
     }
 
-    await execute('INSERT INTO work_records (date, category, subcategory, color, start_time, note) VALUES (?, ?, ?, ?, ?, ?)',
-      [date, category, subcategory || null, color, startTime, note || null]);
+    await execute('INSERT INTO work_records (date, category, subcategory, color, start_time, note, co_workers) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [date, category, subcategory || null, color, startTime, note || null, co_workers || null]);
 
     res.json({
       success: true,
@@ -63,7 +63,7 @@ app.get('/api/records', async (req, res) => {
 app.put('/api/records/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { start_time, end_time, note, photo } = req.body;
+    const { start_time, end_time, note, photo, co_workers } = req.body;
     const record = await queryOne('SELECT * FROM work_records WHERE id = ?', [id]);
     if (!record) return res.status(404).json({ success: false, error: '記録が見つかりません' });
 
@@ -72,9 +72,10 @@ app.put('/api/records/:id', async (req, res) => {
     const duration = newEnd ? calcDuration(newStart, newEnd) : null;
     const newNote = note !== undefined ? (note || null) : record.note;
     const newPhoto = photo !== undefined ? (photo || null) : record.photo;
+    const newCoWorkers = co_workers !== undefined ? (co_workers || null) : record.co_workers;
 
-    await execute('UPDATE work_records SET start_time = ?, end_time = ?, duration_minutes = ?, note = ?, photo = ? WHERE id = ?',
-      [newStart, newEnd, duration, newNote, newPhoto, id]);
+    await execute('UPDATE work_records SET start_time = ?, end_time = ?, duration_minutes = ?, note = ?, photo = ?, co_workers = ? WHERE id = ?',
+      [newStart, newEnd, duration, newNote, newPhoto, newCoWorkers, id]);
     res.json({ success: true, message: '記録を更新しました' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -326,6 +327,33 @@ function calcDuration(startStr, endStr) {
   const [eh,em] = endStr.split(':').map(Number);
   return (eh*60+em) - (sh*60+sm);
 }
+
+// ==================== APP SETTINGS API ====================
+// 振替必要日数の取得
+app.get('/api/settings/transfer-days', async (req, res) => {
+  try {
+    const setting = await queryOne("SELECT value FROM app_settings WHERE key = 'transfer_needed_days'");
+    res.json({ success: true, value: setting ? parseFloat(setting.value) : 0.0 });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 振替必要日数の保存
+app.post('/api/settings/transfer-days', async (req, res) => {
+  try {
+    const { value } = req.body;
+    if (value === undefined) return res.status(400).json({ success: false, error: 'value required' });
+    
+    // 小数点第一位に整形
+    const formattedValue = parseFloat(value).toFixed(1);
+    
+    await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('transfer_needed_days', ?)", [formattedValue]);
+    res.json({ success: true, message: '振替必要日数を更新しました', value: parseFloat(formattedValue) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
