@@ -53,6 +53,12 @@ async function initDb() {
   } catch (e) {
     // カラムが既に存在する場合は無視
   }
+  // 既存テーブルにco_workersカラムがない場合は追加
+  try {
+    await db.execute('ALTER TABLE work_records ADD COLUMN co_workers TEXT');
+  } catch (e) {
+    // カラムが既に存在する場合は無視
+  }
   await db.execute('CREATE INDEX IF NOT EXISTS idx_work_records_date ON work_records(date)');
   await db.execute(`
     CREATE TABLE IF NOT EXISTS weekly_schedules (
@@ -98,6 +104,17 @@ async function initDb() {
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     )
   `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+  try {
+    await db.execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('transfer_needed_days', '0.0')");
+  } catch (e) {
+    // エラーは無視
+  }
   console.log(`📦 DB接続: ${isProduction ? 'Turso Cloud' : 'ローカルファイル'}`);
 }
 
