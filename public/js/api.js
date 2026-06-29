@@ -23,16 +23,16 @@ const API = {
     }
   },
 
-  createRecord(category, subcategory, color, note) {
-    return this.request('POST', '/api/records', { category, subcategory, color, note });
+  createRecord(category, subcategory, color, note, coWorkers) {
+    return this.request('POST', '/api/records', { category, subcategory, color, note, co_workers: coWorkers });
   },
 
   getRecords(date) {
     return this.request('GET', `/api/records?date=${date}`);
   },
 
-  updateRecord(id, startTime, endTime, note, photo) {
-    return this.request('PUT', `/api/records/${id}`, { start_time: startTime, end_time: endTime, note, photo });
+  updateRecord(id, startTime, endTime, note, photo, coWorkers) {
+    return this.request('PUT', `/api/records/${id}`, { start_time: startTime, end_time: endTime, note, photo, co_workers: coWorkers });
   },
 
   deleteRecord(id) {
@@ -93,5 +93,13 @@ const API = {
 
   deleteTask(id) {
     return this.request('DELETE', `/api/tasks/${id}`);
+  },
+
+  getTransferDays() {
+    return this.request('GET', '/api/settings/transfer-days');
+  },
+
+  saveTransferDays(value) {
+    return this.request('POST', '/api/settings/transfer-days', { value });
   }
 };
