@@ -51,7 +51,8 @@
     timeline: $('#view-timeline'),
     summary: $('#view-summary'),
     dashboard: $('#view-dashboard'),
-    schedule: $('#view-schedule')
+    schedule: $('#view-schedule'),
+    releases: $('#view-releases')
   };
 
   // ===== Init =====
@@ -825,6 +826,153 @@
     });
   }
 
+  // ===== Product Releases =====
+  let productReleases = [];
+
+  async function showReleases() {
+    showView('releases', '✨ 発売予定');
+    await loadReleases();
+  }
+
+  async function loadReleases() {
+    try {
+      const res = await API.getReleases();
+      if (res.success) productReleases = res.items || [];
+      renderReleases();
+    } catch (e) {
+      $('#release-list').innerHTML = '<div class="timeline-empty">読み込みに失敗しました</div>';
+    }
+  }
+
+  function renderReleases() {
+    const list = $('#release-list');
+    if (productReleases.length === 0) {
+      list.innerHTML = '<div class="timeline-empty">登録されている発売予定はありません<br><small style="color:var(--text-muted)">右上の「＋ 追加」から登録できます</small></div>';
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+
+    list.innerHTML = productReleases.map(item => {
+      const relDate = new Date(item.release_date + 'T00:00:00');
+      const diffMs = relDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      let countdownHtml = '';
+      let cardExtraClass = '';
+      if (diffDays > 7) {
+        countdownHtml = `<div class="rel-countdown upcoming"><span class="rel-unit">あと</span>${diffDays}日</div>`;
+      } else if (diffDays > 0) {
+        countdownHtml = `<div class="rel-countdown soon"><span class="rel-unit">あと</span>${diffDays}日</div>`;
+      } else if (diffDays === 0) {
+        countdownHtml = `<div class="rel-countdown today">本日<span class="rel-unit">発売日🎉</span></div>`;
+      } else {
+        countdownHtml = `<div class="rel-countdown past">発売済<span class="rel-unit">${Math.abs(diffDays)}日前</span></div>`;
+        cardExtraClass = ' past-release';
+      }
+
+      let badgeClass = 'type-new';
+      if (item.product_type === '期間限定') badgeClass = 'type-limited';
+      else if (item.product_type === 'その他') badgeClass = 'type-other';
+
+      const m = relDate.getMonth() + 1;
+      const d = relDate.getDate();
+      const dow = dayNames[relDate.getDay()];
+      const noteHtml = item.note ? `<div class="rel-note">📝 ${item.note}</div>` : '';
+
+      return `
+        <div class="release-card${cardExtraClass}" data-release-id="${item.id}">
+          ${countdownHtml}
+          <div class="rel-info">
+            <div class="rel-top-row">
+              <span class="rel-badge ${badgeClass}">${item.product_type}</span>
+              <span class="rel-date">発売日: ${relDate.getFullYear()}/${m}/${d}(${dow})</span>
+            </div>
+            <div class="rel-name">${item.product_name}</div>
+            ${noteHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openReleaseModal(releaseId) {
+    const typeBtns = $$('#release-type-selector .release-type-btn');
+    if (releaseId) {
+      const item = productReleases.find(r => String(r.id) === String(releaseId));
+      if (!item) return;
+      $('#release-modal-title').textContent = '✒️ 発売予定を編集';
+      $('#release-edit-id').value = item.id;
+      $('#release-input-name').value = item.product_name;
+      $('#release-input-date').value = item.release_date;
+      $('#release-input-note').value = item.note || '';
+      typeBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.type === item.product_type);
+      });
+      $('#btn-release-delete').classList.remove('hidden');
+    } else {
+      $('#release-modal-title').textContent = '✨ 発売予定を登録';
+      $('#release-edit-id').value = '';
+      $('#release-input-name').value = '';
+      $('#release-input-date').value = '';
+      $('#release-input-note').value = '';
+      typeBtns.forEach((btn, idx) => {
+        btn.classList.toggle('active', idx === 0);
+      });
+      $('#btn-release-delete').classList.add('hidden');
+    }
+    $('#release-modal').classList.remove('hidden');
+    setTimeout(() => $('#release-input-name').focus(), 100);
+  }
+
+  function closeReleaseModal() {
+    $('#release-modal').classList.add('hidden');
+  }
+
+  async function saveRelease() {
+    const name = $('#release-input-name').value.trim();
+    const date = $('#release-input-date').value;
+    const note = $('#release-input-note').value.trim();
+    const activeTypeBtn = $('#release-type-selector .release-type-btn.active');
+    const productType = activeTypeBtn ? activeTypeBtn.dataset.type : '新商品';
+
+    if (!name || !date) {
+      showToast('商品名と発売日を入力してください');
+      return;
+    }
+    try {
+      const editId = $('#release-edit-id').value;
+      if (editId) {
+        await API.updateRelease(editId, name, date, productType, note);
+        showToast('発売予定を更新しました');
+      } else {
+        await API.createRelease(name, date, productType, note);
+        showToast('発売予定を登録しました');
+      }
+      closeReleaseModal();
+      await loadReleases();
+    } catch (e) {
+      showToast('保存失敗: ' + (e.message || ''));
+    }
+  }
+
+  async function deleteRelease() {
+    const id = $('#release-edit-id').value;
+    if (!id) return;
+    showConfirm('この発売予定を削除しますか？', async () => {
+      try {
+        await API.deleteRelease(id);
+        showToast('削除しました');
+        closeReleaseModal();
+        await loadReleases();
+      } catch (e) {
+        showToast('エラー: ' + (e.message || ''));
+      }
+    });
+  }
+
   // ===== Color Picker =====
   function showColorPicker(dotEl, items, idx) {
     const existing = document.querySelector('.color-picker-overlay');
@@ -1050,6 +1198,7 @@
     // Bottom actions
     $('#btn-timeline').addEventListener('click', () => showTimeline());
     $('#btn-schedule').addEventListener('click', () => showSchedule());
+    $('#btn-releases').addEventListener('click', () => showReleases());
     $('#btn-add-task-bottom').addEventListener('click', () => openTaskModal(null));
     $('#btn-end-work').addEventListener('click', () => endWork());
 
@@ -1115,6 +1264,23 @@
     $('#deadline-list').addEventListener('click', (e) => {
       const card = e.target.closest('.dl-card');
       if (card) openTaskModal(card.dataset.taskId);
+    });
+
+    // ===== Product Releases Events =====
+    $('#btn-add-release').addEventListener('click', () => openReleaseModal(null));
+    $('#btn-release-cancel').addEventListener('click', closeReleaseModal);
+    $('.release-modal-backdrop').addEventListener('click', closeReleaseModal);
+    $('#btn-release-save').addEventListener('click', saveRelease);
+    $('#btn-release-delete').addEventListener('click', deleteRelease);
+    $('#release-type-selector').addEventListener('click', (e) => {
+      const btn = e.target.closest('.release-type-btn');
+      if (!btn) return;
+      $$('#release-type-selector .release-type-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    $('#release-list').addEventListener('click', (e) => {
+      const card = e.target.closest('.release-card');
+      if (card) openReleaseModal(card.dataset.releaseId);
     });
 
     // ===== Schedule Events =====
