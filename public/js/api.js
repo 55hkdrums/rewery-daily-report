@@ -101,5 +101,21 @@ const API = {
 
   saveTransferDays(value) {
     return this.request('POST', '/api/settings/transfer-days', { value });
+  },
+
+  getReleases() {
+    return this.request('GET', '/api/releases');
+  },
+
+  createRelease(product_name, release_date, product_type, note) {
+    return this.request('POST', '/api/releases', { product_name, release_date, product_type, note });
+  },
+
+  updateRelease(id, product_name, release_date, product_type, note) {
+    return this.request('PUT', `/api/releases/${id}`, { product_name, release_date, product_type, note });
+  },
+
+  deleteRelease(id) {
+    return this.request('DELETE', `/api/releases/${id}`);
   }
 };
