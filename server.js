@@ -305,6 +305,57 @@ app.delete('/api/tasks/:id', async (req, res) => {
   }
 });
 
+// ==================== PRODUCT RELEASES API ====================
+
+// 発売予定一覧取得
+app.get('/api/releases', async (req, res) => {
+  try {
+    const items = await queryAll('SELECT * FROM product_releases ORDER BY release_date ASC, id ASC');
+    res.json({ success: true, items });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 発売予定登録
+app.post('/api/releases', async (req, res) => {
+  try {
+    const { product_name, release_date, product_type, note } = req.body;
+    if (!product_name || !release_date) return res.status(400).json({ success: false, error: 'product_name and release_date required' });
+    const result = await execute(
+      'INSERT INTO product_releases (product_name, release_date, product_type, note) VALUES (?, ?, ?, ?)',
+      [product_name, release_date, product_type || '新商品', note || null]
+    );
+    res.json({ success: true, id: result.lastId });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 発売予定更新
+app.put('/api/releases/:id', async (req, res) => {
+  try {
+    const { product_name, release_date, product_type, note } = req.body;
+    await execute(
+      'UPDATE product_releases SET product_name = ?, release_date = ?, product_type = ?, note = ? WHERE id = ?',
+      [product_name, release_date, product_type || '新商品', note || null, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 発売予定削除
+app.delete('/api/releases/:id', async (req, res) => {
+  try {
+    await execute('DELETE FROM product_releases WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==================== HELPERS ====================
 function toJST(d) {
   // UTC→JST(+9h)に変換
