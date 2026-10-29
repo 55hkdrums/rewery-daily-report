@@ -539,12 +539,17 @@
         if (res.schedule.photo) {
           $('#sched-photo-img').src = res.schedule.photo;
           $('#sched-photo-preview').classList.remove('hidden');
+          $('#btn-copy-photo-next-week').classList.remove('hidden');
         } else {
+          $('#sched-photo-img').src = '';
           $('#sched-photo-preview').classList.add('hidden');
+          $('#btn-copy-photo-next-week').classList.add('hidden');
         }
       } else {
         weeklyData = {};
+        $('#sched-photo-img').src = '';
         $('#sched-photo-preview').classList.add('hidden');
+        $('#btn-copy-photo-next-week').classList.add('hidden');
       }
       schedPhotoData = undefined;
       schedPhotoChanged = false;
@@ -574,7 +579,7 @@
       return `<th${cls}>${d.getDate()}${DAY_LABELS[i]}</th>`;
     }).join('');
 
-    // 1. 製造日程 (AM/PM)
+    // その他スケジュール (AM/PM)
     const periods = ['AM','PM'];
     const rows = periods.map(p => {
       const cells = DAYS.map((day, i) => {
@@ -594,54 +599,12 @@
         <tbody>${rows}</tbody>
       </table>
     `;
-
-    // 2. 仕込予定
-    const brewCells = DAYS.map((day, i) => {
-      const d = addDays(currentWeekStart, i);
-      const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
-      const val = (weeklyData[day] && weeklyData[day]['brew']) || '';
-      let cls = val ? 'grid-cell has-content' : 'grid-cell';
-      if (isToday) cls += ' today-col';
-      return `<td class="${cls}" data-day="${day}" data-period="brew">${val}</td>`;
-    }).join('');
-
-    $('#brew-grid').innerHTML = `
-      <table class="weekly-table">
-        <thead><tr><th></th>${headers}</tr></thead>
-        <tbody>
-          <tr><td class="period-label" style="font-size:0.7rem; width:36px;">仕込</td>${brewCells}</tr>
-        </tbody>
-      </table>
-    `;
-
-    // 3. 濾過火入れ
-    const filtCells = DAYS.map((day, i) => {
-      const d = addDays(currentWeekStart, i);
-      const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
-      const val = (weeklyData[day] && weeklyData[day]['filtration']) || '';
-      let cls = val ? 'grid-cell has-content' : 'grid-cell';
-      if (isToday) cls += ' today-col';
-      return `<td class="${cls}" data-day="${day}" data-period="filtration">${val}</td>`;
-    }).join('');
-
-    $('#filtration-grid').innerHTML = `
-      <table class="weekly-table">
-        <thead><tr><th></th>${headers}</tr></thead>
-        <tbody>
-          <tr><td class="period-label" style="font-size:0.7rem; width:36px;">濾過</td>${filtCells}</tr>
-        </tbody>
-      </table>
-    `;
   }
 
   function openCellEdit(day, period) {
     const dayIdx = DAYS.indexOf(day);
     const d = addDays(currentWeekStart, dayIdx);
-    
-    let periodLabel = period.toUpperCase();
-    if (period === 'brew') periodLabel = '仕込予定';
-    if (period === 'filtration') periodLabel = '濾過火入れ';
-
+    const periodLabel = period.toUpperCase();
     const label = `${d.getMonth()+1}/${d.getDate()}(${DAY_LABELS[dayIdx]}) ${periodLabel}`;
     $('#cell-edit-day').value = day;
     $('#cell-edit-period').value = period;
@@ -676,6 +639,34 @@
     } catch (e) {
       console.error('saveWeeklySchedule error:', e);
       showToast('保存失敗: ' + (e.message || '不明なエラー'));
+    }
+  }
+
+  async function copyPhotoToNextWeek() {
+    const currentPhoto = schedPhotoChanged ? schedPhotoData : $('#sched-photo-img').getAttribute('src');
+    if (!currentPhoto) {
+      showToast('コピーする写真がありません');
+      return;
+    }
+    try {
+      // 現在の週の未保存変更があれば先に保存しておく
+      if (schedPhotoChanged) {
+        await API.saveSchedule(currentWeekStart, weeklyData, schedPhotoData || null);
+        schedPhotoChanged = false;
+      }
+      const nextWeekStart = formatDateLocal(addDays(currentWeekStart, 7));
+      const nextRes = await API.getSchedule(nextWeekStart);
+      const nextData = (nextRes.success && nextRes.schedule && nextRes.schedule.schedule_data) ? nextRes.schedule.schedule_data : {};
+      const saveRes = await API.saveSchedule(nextWeekStart, nextData, currentPhoto);
+      if (saveRes.success) {
+        const mon = addDays(nextWeekStart, 0);
+        const sat = addDays(nextWeekStart, 5);
+        showToast(`翌週(${mon.getMonth()+1}/${mon.getDate()}〜${sat.getMonth()+1}/${sat.getDate()})に写真をコピーしました📋`);
+      } else {
+        showToast('コピーに失敗しました');
+      }
+    } catch (e) {
+      showToast('コピー失敗: ' + (e.message || ''));
     }
   }
 
@@ -1300,8 +1291,6 @@
       if (cell) openCellEdit(cell.dataset.day, cell.dataset.period);
     };
     $('#weekly-grid').addEventListener('click', handleGridClick);
-    $('#brew-grid').addEventListener('click', handleGridClick);
-    $('#filtration-grid').addEventListener('click', handleGridClick);
 
     // Cell edit modal
     $('#btn-cell-cancel').addEventListener('click', closeCellEdit);
@@ -1319,15 +1308,19 @@
           schedPhotoChanged = true;
           $('#sched-photo-img').src = dataUrl;
           $('#sched-photo-preview').classList.remove('hidden');
+          $('#btn-copy-photo-next-week').classList.remove('hidden');
         });
       }
     });
     $('#btn-sched-photo-remove').addEventListener('click', () => {
       schedPhotoData = '';
       schedPhotoChanged = true;
+      $('#sched-photo-img').src = '';
       $('#sched-photo-preview').classList.add('hidden');
+      $('#btn-copy-photo-next-week').classList.add('hidden');
       $('#sched-photo-input').value = '';
     });
+    $('#btn-copy-photo-next-week').addEventListener('click', copyPhotoToNextWeek);
   }
 
   // ===== Start =====
