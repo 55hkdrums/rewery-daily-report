@@ -485,6 +485,18 @@ input { font-family: inherit; }
 
 .sched-photo-section { margin-top: 8px; }
 .sched-photo-full { max-width: 100%; max-height: 400px; }
+.sched-photo-actions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.photo-copy-next-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 14px; border-radius: 10px;
+  background: rgba(66,165,245,0.18); color: #64b5f6;
+  border: 1px solid rgba(66,165,245,0.35);
+  font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: var(--transition);
+}
+.photo-copy-next-btn:active { transform: scale(0.96); background: rgba(66,165,245,0.28); }
 
 /* Color Picker Popup */
 .color-picker-popup {
