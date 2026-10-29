@@ -105,6 +105,16 @@ async function initDb() {
     )
   `);
   await db.execute(`
+    CREATE TABLE IF NOT EXISTS product_releases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_name TEXT NOT NULL,
+      release_date TEXT NOT NULL,
+      product_type TEXT NOT NULL DEFAULT '新商品',
+      note TEXT,
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
