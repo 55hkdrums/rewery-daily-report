@@ -161,6 +161,28 @@ app.get('/api/stats/monthly', async (req, res) => {
 
 // ==================== SCHEDULE API ====================
 
+// 複数週のスケジュール一括取得（月間カレンダー用・軽量のためphoto除外）
+app.get('/api/schedule/batch', async (req, res) => {
+  try {
+    const weeksParam = req.query.weeks;
+    if (!weeksParam) return res.status(400).json({ success: false, error: 'weeks parameter required' });
+    const weeks = weeksParam.split(',').map(s => s.trim()).filter(Boolean);
+    if (weeks.length === 0) return res.json({ success: true, schedules: {} });
+    const placeholders = weeks.map(() => '?').join(',');
+    const rows = await queryAll(
+      `SELECT week_start, schedule_data FROM weekly_schedules WHERE week_start IN (${placeholders})`,
+      weeks
+    );
+    const schedules = {};
+    for (const r of rows) {
+      schedules[r.week_start] = JSON.parse(r.schedule_data || '{}');
+    }
+    res.json({ success: true, schedules });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 週間スケジュール取得
 app.get('/api/schedule', async (req, res) => {
   try {
