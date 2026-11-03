@@ -55,6 +55,10 @@ const API = {
     return this.request('GET', `/api/schedule?week=${weekStart}`);
   },
 
+  getScheduleBatch(weeks) {
+    return this.request('GET', `/api/schedule/batch?weeks=${weeks.join(',')}`);
+  },
+
   saveSchedule(weekStart, scheduleData, photo) {
     return this.request('PUT', '/api/schedule', { week_start: weekStart, schedule_data: scheduleData, photo });
   },
