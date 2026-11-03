@@ -52,6 +52,7 @@
     summary: $('#view-summary'),
     dashboard: $('#view-dashboard'),
     schedule: $('#view-schedule'),
+    calendar: $('#view-calendar'),
     releases: $('#view-releases')
   };
 
@@ -554,6 +555,7 @@
       schedPhotoData = undefined;
       schedPhotoChanged = false;
       $('#sched-photo-input').value = '';
+      if ($('#sched-photo-camera-input')) $('#sched-photo-camera-input').value = '';
       renderWeeklyGrid();
     } catch (e) {
       showToast('スケジュールの読み込みに失敗');
@@ -667,6 +669,168 @@
       }
     } catch (e) {
       showToast('コピー失敗: ' + (e.message || ''));
+    }
+  }
+
+  // ===== Monthly / Yearly Calendar (Linked with Weekly Schedule) =====
+  const ALL_DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const ALL_DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+  let currentCalYear = new Date().getFullYear();
+  let currentCalMonth = new Date().getMonth(); // 0-11
+  let calendarSchedules = {}; // { [week_start]: schedule_data }
+
+  async function openMonthlyCalendar() {
+    // 現在の週間スケジュールの入力内容を先に保存して連動を確実にする
+    try {
+      const photo = schedPhotoChanged ? (schedPhotoData || null) : undefined;
+      await API.saveSchedule(currentWeekStart, weeklyData, photo);
+      schedPhotoChanged = false;
+    } catch (e) {
+      // ignore
+    }
+    const baseDate = new Date(currentWeekStart + 'T00:00:00');
+    currentCalYear = baseDate.getFullYear();
+    currentCalMonth = baseDate.getMonth();
+    showView('calendar', '📆 年間カレンダー');
+    await loadMonthlyCalendar();
+  }
+
+  function getWeeksForMonth(year, month) {
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    // カレンダー表示範囲の最初の日曜日〜最後の土曜日
+    const startCal = new Date(firstDay);
+    startCal.setDate(startCal.getDate() - startCal.getDay());
+    const endCal = new Date(lastDay);
+    endCal.setDate(endCal.getDate() + (6 - endCal.getDay()));
+
+    const weeksSet = new Set();
+    const cur = new Date(startCal);
+    while (cur <= endCal) {
+      weeksSet.add(getMonday(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return {
+      startCal,
+      endCal,
+      weeks: Array.from(weeksSet)
+    };
+  }
+
+  async function loadMonthlyCalendar() {
+    $('#calendar-month-label').textContent = `${currentCalYear}年 ${currentCalMonth + 1}月`;
+    const { startCal, endCal, weeks } = getWeeksForMonth(currentCalYear, currentCalMonth);
+    try {
+      const res = await API.getScheduleBatch(weeks);
+      calendarSchedules = (res.success && res.schedules) ? res.schedules : {};
+      renderMonthlyCalendar(startCal, endCal);
+    } catch (e) {
+      showToast('カレンダーの読み込みに失敗しました');
+    }
+  }
+
+  function renderMonthlyCalendar(startCal, endCal) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const headerCells = ALL_DAY_LABELS.map((lbl, idx) => {
+      let cls = '';
+      if (idx === 0) cls = ' class="sun-col"';
+      else if (idx === 6) cls = ' class="sat-col"';
+      return `<th${cls}>${lbl}</th>`;
+    }).join('');
+
+    let rowsHtml = '';
+    const cur = new Date(startCal);
+    while (cur <= endCal) {
+      let cellsHtml = '';
+      for (let dow = 0; dow < 7; dow++) {
+        const isCurrentMonth = cur.getMonth() === currentCalMonth;
+        const isToday = cur.getFullYear() === today.getFullYear() &&
+                        cur.getMonth() === today.getMonth() &&
+                        cur.getDate() === today.getDate();
+        const weekStart = getMonday(cur);
+        const dayKey = ALL_DAY_KEYS[cur.getDay()];
+        const dateStr = formatDateLocal(cur);
+
+        const dayData = (calendarSchedules[weekStart] && calendarSchedules[weekStart][dayKey]) || {};
+        const amVal = dayData.am || '';
+        const pmVal = dayData.pm || '';
+
+        let cellCls = 'cal-day-cell';
+        if (!isCurrentMonth) cellCls += ' other-month';
+        if (isToday) cellCls += ' today-cell';
+        if (dow === 0) cellCls += ' sun-col';
+        if (dow === 6) cellCls += ' sat-col';
+
+        const amHtml = amVal ? `<div class="cal-entry cal-entry-am">☀️${amVal}</div>` : '';
+        const pmHtml = pmVal ? `<div class="cal-entry cal-entry-pm">🌙${pmVal}</div>` : '';
+
+        cellsHtml += `
+          <td class="${cellCls}" data-date="${dateStr}" data-week="${weekStart}" data-day="${dayKey}">
+            <div class="cal-day-num">${cur.getDate()}</div>
+            ${amHtml}
+            ${pmHtml}
+          </td>
+        `;
+        cur.setDate(cur.getDate() + 1);
+      }
+      rowsHtml += `<tr>${cellsHtml}</tr>`;
+    }
+
+    $('#monthly-calendar-grid').innerHTML = `
+      <table class="monthly-cal-table">
+        <thead><tr>${headerCells}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+  }
+
+  function openCalendarDayModal(dateStr, weekStart, dayKey) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dowLabel = ALL_DAY_LABELS[d.getDay()];
+    $('#calendar-day-modal-title').textContent = `📅 ${d.getMonth() + 1}/${d.getDate()}(${dowLabel}) の予定`;
+    $('#cal-edit-week-start').value = weekStart;
+    $('#cal-edit-day-key').value = dayKey;
+
+    const dayData = (calendarSchedules[weekStart] && calendarSchedules[weekStart][dayKey]) || {};
+    $('#cal-edit-am').value = dayData.am || '';
+    $('#cal-edit-pm').value = dayData.pm || '';
+
+    $('#calendar-day-modal').classList.remove('hidden');
+    setTimeout(() => $('#cal-edit-am').focus(), 100);
+  }
+
+  function closeCalendarDayModal() {
+    $('#calendar-day-modal').classList.add('hidden');
+  }
+
+  async function saveCalendarDayModal() {
+    const weekStart = $('#cal-edit-week-start').value;
+    const dayKey = $('#cal-edit-day-key').value;
+    const amText = $('#cal-edit-am').value.trim();
+    const pmText = $('#cal-edit-pm').value.trim();
+
+    if (!calendarSchedules[weekStart]) calendarSchedules[weekStart] = {};
+    if (!calendarSchedules[weekStart][dayKey]) calendarSchedules[weekStart][dayKey] = {};
+    calendarSchedules[weekStart][dayKey].am = amText;
+    calendarSchedules[weekStart][dayKey].pm = pmText;
+
+    try {
+      const res = await API.saveSchedule(weekStart, calendarSchedules[weekStart], undefined);
+      if (res.success) {
+        if (weekStart === currentWeekStart) {
+          weeklyData = JSON.parse(JSON.stringify(calendarSchedules[weekStart]));
+        }
+        closeCalendarDayModal();
+        const { startCal, endCal } = getWeeksForMonth(currentCalYear, currentCalMonth);
+        renderMonthlyCalendar(startCal, endCal);
+        showToast('予定を保存しました');
+      } else {
+        showToast('保存に失敗しました');
+      }
+    } catch (e) {
+      showToast('保存失敗: ' + (e.message || ''));
     }
   }
 
@@ -1157,7 +1321,7 @@
 
     // Back button
     $('#btn-back').addEventListener('click', () => {
-      if (currentView === 'subcategory') showView('main');
+      if (currentView === 'calendar') showSchedule();
       else showView('main');
     });
 
@@ -1300,8 +1464,8 @@
     // Save weekly
     $('#btn-save-weekly').addEventListener('click', saveWeeklySchedule);
 
-    // Schedule photo
-    $('#sched-photo-input').addEventListener('change', (e) => {
+    // Schedule photo (カメラ撮影 & アルバムから添付の両方に対応)
+    const onSchedPhotoSelected = (e) => {
       if (e.target.files && e.target.files[0]) {
         compressImage(e.target.files[0], 1200, 0.7).then(dataUrl => {
           schedPhotoData = dataUrl;
@@ -1311,7 +1475,11 @@
           $('#btn-copy-photo-next-week').classList.remove('hidden');
         });
       }
-    });
+    };
+    $('#sched-photo-input').addEventListener('change', onSchedPhotoSelected);
+    if ($('#sched-photo-camera-input')) {
+      $('#sched-photo-camera-input').addEventListener('change', onSchedPhotoSelected);
+    }
     $('#btn-sched-photo-remove').addEventListener('click', () => {
       schedPhotoData = '';
       schedPhotoChanged = true;
@@ -1319,8 +1487,38 @@
       $('#sched-photo-preview').classList.add('hidden');
       $('#btn-copy-photo-next-week').classList.add('hidden');
       $('#sched-photo-input').value = '';
+      if ($('#sched-photo-camera-input')) $('#sched-photo-camera-input').value = '';
     });
     $('#btn-copy-photo-next-week').addEventListener('click', copyPhotoToNextWeek);
+
+    // ===== Monthly / Yearly Calendar Events =====
+    $('#btn-open-calendar').addEventListener('click', openMonthlyCalendar);
+    $('#btn-back-to-schedule').addEventListener('click', () => showSchedule());
+    $('#btn-month-prev').addEventListener('click', () => {
+      currentCalMonth--;
+      if (currentCalMonth < 0) {
+        currentCalMonth = 11;
+        currentCalYear--;
+      }
+      loadMonthlyCalendar();
+    });
+    $('#btn-month-next').addEventListener('click', () => {
+      currentCalMonth++;
+      if (currentCalMonth > 11) {
+        currentCalMonth = 0;
+        currentCalYear++;
+      }
+      loadMonthlyCalendar();
+    });
+    $('#monthly-calendar-grid').addEventListener('click', (e) => {
+      const cell = e.target.closest('.cal-day-cell');
+      if (cell) {
+        openCalendarDayModal(cell.dataset.date, cell.dataset.week, cell.dataset.day);
+      }
+    });
+    $('#btn-cal-day-cancel').addEventListener('click', closeCalendarDayModal);
+    $('#btn-cal-day-save').addEventListener('click', saveCalendarDayModal);
+    $('.calendar-day-modal-backdrop').addEventListener('click', closeCalendarDayModal);
   }
 
   // ===== Start =====
