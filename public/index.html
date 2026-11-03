@@ -190,15 +190,20 @@
       <div class="sched-photo-section" style="margin-top: 8px; margin-bottom: 20px;">
         <div class="schedule-section-title">📷 スケジュール写真</div>
         <div class="sched-photo-actions">
+          <label for="sched-photo-camera-input" class="photo-attach-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            カメラ撮影
+          </label>
           <label for="sched-photo-input" class="photo-attach-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            写真を選択・変更
+            写真から添付
           </label>
           <button id="btn-copy-photo-next-week" class="photo-copy-next-btn hidden" type="button">
             📋 翌週に写真をコピー ▶
           </button>
         </div>
-        <input type="file" id="sched-photo-input" accept="image/*" capture="environment" class="photo-file-input">
+        <input type="file" id="sched-photo-camera-input" accept="image/*" capture="environment" class="photo-file-input">
+        <input type="file" id="sched-photo-input" accept="image/*" class="photo-file-input">
         <div id="sched-photo-preview" class="photo-preview-wrap hidden">
           <img id="sched-photo-img" class="photo-preview-img sched-photo-full" alt="スケジュール">
           <button id="btn-sched-photo-remove" class="photo-remove-btn" type="button">✕</button>
@@ -211,7 +216,48 @@
       </div>
 
       <button id="btn-save-weekly" class="sched-save-btn" style="margin-top: 15px;">保存</button>
+      <button id="btn-open-calendar" class="sched-calendar-btn" style="margin-top: 10px;" type="button">
+        📆 年間カレンダー（月別表示・入力）
+      </button>
     </main>
+
+    <!-- 年間カレンダー（月別）画面 -->
+    <main id="view-calendar" class="view">
+      <div class="week-nav">
+        <button id="btn-month-prev" class="week-nav-btn">◀</button>
+        <span id="calendar-month-label" class="week-label"></span>
+        <button id="btn-month-next" class="week-nav-btn">▶</button>
+      </div>
+      <div class="calendar-help-text">日付をタップすると予定（AM/PM）を入力・編集できます</div>
+      <div id="monthly-calendar-grid" class="monthly-calendar-grid">
+        <!-- JSで動的生成 -->
+      </div>
+      <button id="btn-back-to-schedule" class="sched-calendar-back-btn" style="margin-top: 14px;" type="button">
+        ◀ 週間スケジュールに戻る
+      </button>
+    </main>
+
+    <!-- カレンダー日付編集モーダル -->
+    <div id="calendar-day-modal" class="modal hidden">
+      <div class="modal-backdrop calendar-day-modal-backdrop"></div>
+      <div class="modal-content">
+        <h3 class="modal-title" id="calendar-day-modal-title">📅 予定を編集</h3>
+        <input type="hidden" id="cal-edit-week-start">
+        <input type="hidden" id="cal-edit-day-key">
+        <div class="modal-field">
+          <label for="cal-edit-am">☀️ AM（午前）</label>
+          <textarea id="cal-edit-am" class="note-textarea" placeholder="午前の予定を入力..." rows="2"></textarea>
+        </div>
+        <div class="modal-field">
+          <label for="cal-edit-pm">🌙 PM（午後）</label>
+          <textarea id="cal-edit-pm" class="note-textarea" placeholder="午後の予定を入力..." rows="2"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-cal-day-cancel" class="modal-btn cancel">キャンセル</button>
+          <button id="btn-cal-day-save" class="modal-btn save">保存</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 発売予定画面 -->
     <main id="view-releases" class="view">
