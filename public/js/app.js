@@ -509,6 +509,35 @@
   let weeklyData = {};
   let schedPhotoData = undefined;
   let schedPhotoChanged = false;
+  let schedZoomScale = 1;
+  let schedZoomTx = 0;
+  let schedZoomTy = 0;
+
+  function updateSchedPhotoTransform() {
+    const img = $('#sched-photo-img');
+    const wrap = $('#sched-photo-preview');
+    const resetBtn = $('#btn-sched-photo-zoom-reset');
+    if (!img || !wrap) return;
+    if (schedZoomScale <= 1.01) {
+      schedZoomScale = 1;
+      schedZoomTx = 0;
+      schedZoomTy = 0;
+      img.style.transform = '';
+      wrap.classList.remove('is-zoomed');
+      if (resetBtn) resetBtn.classList.add('hidden');
+    } else {
+      img.style.transform = `translate(${schedZoomTx}px, ${schedZoomTy}px) scale(${schedZoomScale})`;
+      wrap.classList.add('is-zoomed');
+      if (resetBtn) resetBtn.classList.remove('hidden');
+    }
+  }
+
+  function resetSchedPhotoZoom() {
+    schedZoomScale = 1;
+    schedZoomTx = 0;
+    schedZoomTy = 0;
+    updateSchedPhotoTransform();
+  }
 
   function getMonday(d) {
     const date = new Date(d);
@@ -554,6 +583,7 @@
       }
       schedPhotoData = undefined;
       schedPhotoChanged = false;
+      resetSchedPhotoZoom();
       $('#sched-photo-input').value = '';
       if ($('#sched-photo-camera-input')) $('#sched-photo-camera-input').value = '';
       renderWeeklyGrid();
@@ -1467,9 +1497,10 @@
     // Schedule photo (カメラ撮影 & アルバムから添付の両方に対応)
     const onSchedPhotoSelected = (e) => {
       if (e.target.files && e.target.files[0]) {
-        compressImage(e.target.files[0], 1200, 0.7).then(dataUrl => {
+        compressImage(e.target.files[0], 1600, 0.8).then(dataUrl => {
           schedPhotoData = dataUrl;
           schedPhotoChanged = true;
+          resetSchedPhotoZoom();
           $('#sched-photo-img').src = dataUrl;
           $('#sched-photo-preview').classList.remove('hidden');
           $('#btn-copy-photo-next-week').classList.remove('hidden');
@@ -1483,13 +1514,109 @@
     $('#btn-sched-photo-remove').addEventListener('click', () => {
       schedPhotoData = '';
       schedPhotoChanged = true;
+      resetSchedPhotoZoom();
       $('#sched-photo-img').src = '';
       $('#sched-photo-preview').classList.add('hidden');
       $('#btn-copy-photo-next-week').classList.add('hidden');
       $('#sched-photo-input').value = '';
       if ($('#sched-photo-camera-input')) $('#sched-photo-camera-input').value = '';
     });
+    if ($('#btn-sched-photo-zoom-reset')) {
+      $('#btn-sched-photo-zoom-reset').addEventListener('click', resetSchedPhotoZoom);
+    }
     $('#btn-copy-photo-next-week').addEventListener('click', copyPhotoToNextWeek);
+
+    // スケジュール写真のピンチアウト・ピンチイン拡大縮小 & ドラッグ移動
+    const photoWrap = $('#sched-photo-preview');
+    if (photoWrap) {
+      let startDist = 0;
+      let startScale = 1;
+      let isPinching = false;
+      let isDragging = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let startTx = 0;
+      let startTy = 0;
+      let lastTapTime = 0;
+
+      const getTouchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+      photoWrap.addEventListener('touchstart', (e) => {
+        if (e.target.closest('button')) return;
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          isPinching = true;
+          isDragging = false;
+          startDist = getTouchDist(e.touches[0], e.touches[1]);
+          startScale = schedZoomScale;
+        } else if (e.touches.length === 1) {
+          const now = Date.now();
+          if (now - lastTapTime < 300) {
+            // ダブルタップで拡大・縮小を切り替え
+            e.preventDefault();
+            if (schedZoomScale > 1.05) {
+              resetSchedPhotoZoom();
+            } else {
+              schedZoomScale = 2.4;
+              schedZoomTx = 0;
+              schedZoomTy = 0;
+              updateSchedPhotoTransform();
+            }
+            lastTapTime = 0;
+            return;
+          }
+          lastTapTime = now;
+
+          if (schedZoomScale > 1.01) {
+            e.preventDefault();
+            isDragging = true;
+            dragStartX = e.touches[0].clientX;
+            dragStartY = e.touches[0].clientY;
+            startTx = schedZoomTx;
+            startTy = schedZoomTy;
+          }
+        }
+      }, { passive: false });
+
+      photoWrap.addEventListener('touchmove', (e) => {
+        if (isPinching && e.touches.length === 2) {
+          e.preventDefault();
+          const dist = getTouchDist(e.touches[0], e.touches[1]);
+          if (startDist > 0) {
+            schedZoomScale = Math.min(5, Math.max(1, startScale * (dist / startDist)));
+            updateSchedPhotoTransform();
+          }
+        } else if (isDragging && e.touches.length === 1 && schedZoomScale > 1.01) {
+          e.preventDefault();
+          const dx = e.touches[0].clientX - dragStartX;
+          const dy = e.touches[0].clientY - dragStartY;
+          const maxPanX = (photoWrap.clientWidth * (schedZoomScale - 1)) / 2 + 40;
+          const maxPanY = (photoWrap.clientHeight * (schedZoomScale - 1)) / 2 + 40;
+          schedZoomTx = Math.min(maxPanX, Math.max(-maxPanX, startTx + dx));
+          schedZoomTy = Math.min(maxPanY, Math.max(-maxPanY, startTy + dy));
+          updateSchedPhotoTransform();
+        }
+      }, { passive: false });
+
+      photoWrap.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+          isPinching = false;
+        }
+        if (e.touches.length === 1 && schedZoomScale > 1.01) {
+          // 2本指から1本指になった時にそのままスムーズにドラッグ移動へ移行
+          isDragging = true;
+          dragStartX = e.touches[0].clientX;
+          dragStartY = e.touches[0].clientY;
+          startTx = schedZoomTx;
+          startTy = schedZoomTy;
+        } else if (e.touches.length === 0) {
+          isDragging = false;
+          if (schedZoomScale <= 1.02) {
+            resetSchedPhotoZoom();
+          }
+        }
+      });
+    }
 
     // ===== Monthly / Yearly Calendar Events =====
     $('#btn-open-calendar').addEventListener('click', openMonthlyCalendar);
