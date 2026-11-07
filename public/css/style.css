@@ -484,7 +484,41 @@ input { font-family: inherit; }
 .sched-save-btn:active { transform: scale(0.96); }
 
 .sched-photo-section { margin-top: 8px; }
-.sched-photo-full { max-width: 100%; max-height: 400px; }
+.sched-photo-full {
+  max-width: 100%; max-height: 400px;
+  transform-origin: center center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.sched-photo-zoom-container {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: rgba(0,0,0,0.25);
+  touch-action: pan-y;
+}
+.sched-photo-zoom-container.is-zoomed {
+  touch-action: none;
+}
+.sched-photo-zoom-container .sched-photo-full {
+  margin: 0 auto;
+}
+.photo-zoom-reset-btn {
+  position: absolute; top: 6px; left: 6px; z-index: 5;
+  padding: 5px 10px; border-radius: 14px;
+  background: rgba(0,0,0,0.75); color: #fff;
+  font-size: 0.72rem; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.25);
+  backdrop-filter: blur(4px);
+}
+.photo-zoom-reset-btn:active { transform: scale(0.95); }
+.photo-zoom-hint {
+  position: absolute; bottom: 6px; right: 8px;
+  padding: 3px 8px; border-radius: 10px;
+  background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.85);
+  font-size: 0.65rem; pointer-events: none;
+}
 .sched-photo-actions {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
