@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="業務日報記録アプリ。ワンプッシュで作業内容と時間を自動記録。">
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -204,9 +204,11 @@
         </div>
         <input type="file" id="sched-photo-camera-input" accept="image/*" capture="environment" class="photo-file-input">
         <input type="file" id="sched-photo-input" accept="image/*" class="photo-file-input">
-        <div id="sched-photo-preview" class="photo-preview-wrap hidden">
-          <img id="sched-photo-img" class="photo-preview-img sched-photo-full" alt="スケジュール">
+        <div id="sched-photo-preview" class="photo-preview-wrap sched-photo-zoom-container hidden">
+          <img id="sched-photo-img" class="photo-preview-img sched-photo-full" alt="スケジュール" draggable="false">
+          <button id="btn-sched-photo-zoom-reset" class="photo-zoom-reset-btn hidden" type="button">🔍 100%に戻す</button>
           <button id="btn-sched-photo-remove" class="photo-remove-btn" type="button">✕</button>
+          <div class="photo-zoom-hint">🤏 ピンチ操作・ダブルタップで拡大縮小</div>
         </div>
       </div>
 
