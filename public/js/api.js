@@ -23,8 +23,8 @@ const API = {
     }
   },
 
-  createRecord(category, subcategory, color, note, coWorkers) {
-    return this.request('POST', '/api/records', { category, subcategory, color, note, co_workers: coWorkers });
+  createRecord(category, subcategory, color, note, coWorkers, startTime) {
+    return this.request('POST', '/api/records', { category, subcategory, color, note, co_workers: coWorkers, start_time: startTime });
   },
 
   getRecords(date) {
