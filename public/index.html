@@ -55,9 +55,17 @@
           <!-- JSで動的生成 -->
         </div>
       </div>
+      <div id="reorder-bar" class="reorder-bar hidden">
+        <span class="reorder-bar-text">🔀 ドラッグして順番を変更</span>
+        <button id="btn-reorder-done" class="reorder-done-btn" type="button">✓ 完了</button>
+      </div>
       <div class="category-grid" id="category-grid">
         <!-- JSで動的生成 -->
       </div>
+      <button id="btn-voice-record" class="voice-record-btn" type="button">
+        <span class="voice-mic-icon">🎤</span>
+        <span class="voice-btn-text">音声でワンプッシュ記録</span>
+      </button>
       <div class="bottom-actions">
         <button id="btn-timeline" class="action-btn timeline-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -87,6 +95,11 @@
       <h2 id="subcategory-title" class="view-title"></h2>
       <div class="subcategory-grid" id="subcategory-grid">
         <!-- JSで動的生成 -->
+      </div>
+      <div id="subcategory-multi-actions" class="subcategory-multi-actions hidden">
+        <button id="btn-subcategory-confirm" class="sched-save-btn" style="width: 100%; margin-top: 14px;" type="button">
+          ✅ 次へ進む
+        </button>
       </div>
     </main>
 
@@ -208,7 +221,7 @@
           <img id="sched-photo-img" class="photo-preview-img sched-photo-full" alt="スケジュール" draggable="false">
           <button id="btn-sched-photo-zoom-reset" class="photo-zoom-reset-btn hidden" type="button">🔍 100%に戻す</button>
           <button id="btn-sched-photo-remove" class="photo-remove-btn" type="button">✕</button>
-          <div class="photo-zoom-hint">🤏 ピンチ操作・ダブルタップで拡大縮小</div>
+          <div class="photo-zoom-hint">🔍 タップで拡大・ピンチで拡大縮小</div>
         </div>
       </div>
 
@@ -361,6 +374,38 @@
         <div class="modal-actions">
           <button id="btn-transfer-cancel" class="modal-btn cancel">キャンセル</button>
           <button id="btn-transfer-save" class="modal-btn save">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 写真全画面ビューア（ピンチイン・ピンチアウト対応） -->
+    <div id="photo-lightbox" class="photo-lightbox hidden" role="dialog" aria-modal="true">
+      <div class="photo-lightbox-toolbar">
+        <button id="btn-lightbox-reset" class="lightbox-tool-btn hidden" type="button">🔍 100%に戻す</button>
+        <span class="lightbox-hint">🤏 ピンチで拡大縮小・ドラッグで移動</span>
+        <button id="btn-lightbox-close" class="lightbox-close-btn" type="button" aria-label="閉じる">✕</button>
+      </div>
+      <div id="photo-lightbox-stage" class="photo-lightbox-stage">
+        <img id="photo-lightbox-img" class="photo-lightbox-img" alt="拡大写真" draggable="false">
+      </div>
+    </div>
+
+    <!-- 音声入力モーダル -->
+    <div id="voice-modal" class="voice-modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-backdrop voice-modal-backdrop"></div>
+      <div class="voice-modal-box">
+        <div class="voice-pulse-wrap" id="voice-pulse-wrap">
+          <div class="voice-pulse-ring"></div>
+          <div class="voice-mic-circle">🎤</div>
+        </div>
+        <p id="voice-status-text" class="voice-status-text">お話しください...</p>
+        <div id="voice-transcript-box" class="voice-transcript-box">例：「洗米始めます」「長野と松本に県販出荷」</div>
+        <div id="voice-fallback-wrap" class="voice-fallback-wrap hidden">
+          <input type="text" id="voice-fallback-input" class="time-input" placeholder="内容を入力して登録..." style="font-size:0.95rem;">
+        </div>
+        <div class="confirm-actions" style="margin-top: 16px;">
+          <button id="btn-voice-cancel" class="confirm-btn confirm-cancel" type="button">キャンセル</button>
+          <button id="btn-voice-submit" class="confirm-btn confirm-ok voice-submit-btn" type="button">登録する</button>
         </div>
       </div>
     </div>
