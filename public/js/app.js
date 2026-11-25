@@ -9,8 +9,19 @@
       items: ['麦芽粉砕', '麦芽粕取り', '麦芽受け入れ', '濾過', 'タンクのガス充填', '火入れ補助', 'タンク洗い補助']
     },
     {
+      name: '日本酒仕込み', icon: '🍶', colorClass: 'card-sake', color: '#4db6ac',
+      items: ['洗米', '蒸し米', '引き込み', '盛り', '出麹', '仕込み', '掛け米']
+    },
+    {
       name: '出荷対応', icon: '🚚', colorClass: 'card-ship', color: '#8bc34a',
-      items: ['デリコ出荷対応', '県販出荷対応', '個人出荷対応', '配達'],
+      items: [
+        '朝一出荷対応',
+        {
+          name: '県販・個人出荷対応',
+          subItems: ['長野', '松本', '上田', '飯田', '諏訪', '佐久', '伊那']
+        },
+        '配達'
+      ],
       hasNoteInput: true
     },
     {
@@ -24,19 +35,23 @@
       hasNoteInput: true
     },
     {
-      name: '売店', icon: '🏪', colorClass: 'card-shop', color: '#ab47bc',
-      items: ['売店', '事務関係']
-    },
-    {
       name: 'その他共通', icon: '📋', colorClass: 'card-other', color: '#e0e0e0',
-      items: ['会議・打ち合わせ', '休憩', '資料作成', '運搬', 'その他']
+      items: ['会議・打ち合わせ', '休憩', '売店', '事務関係', '資料作成', '運搬', 'その他']
     }
   ];
 
   // ===== State =====
+  const CATEGORY_ORDER_KEY = 'brewery_category_order_v1';
   let currentView = 'main';
   let timerInterval = null;
   let currentWorkStart = null;
+  let currentCatIndex = null;
+  let currentSubParent = null;
+  let selectedSubItems = [];
+  let isReorderMode = false;
+  let dragSrcIndex = null;
+  let isDraggingCard = false;
+  let suppressNextClick = false;
 
   // ===== Coworkers =====
   const COWORKERS = ['部長', '藤森', '宮澤', '工藤', '百瀬', '松倉', '野口', '志賀', '林(麗)', '野明', '高木'];
@@ -56,8 +71,77 @@
     releases: $('#view-releases')
   };
 
+  // ===== Category Order Persistence =====
+  function loadCategoryOrder() {
+    try {
+      const saved = localStorage.getItem(CATEGORY_ORDER_KEY);
+      if (!saved) return;
+      const orderNames = JSON.parse(saved);
+      if (!Array.isArray(orderNames)) return;
+      const byName = new Map(CATEGORIES.map(c => [c.name, c]));
+      const reordered = [];
+      orderNames.forEach(name => {
+        if (byName.has(name)) {
+          reordered.push(byName.get(name));
+          byName.delete(name);
+        }
+      });
+      byName.forEach(c => reordered.push(c));
+      CATEGORIES.splice(0, CATEGORIES.length, ...reordered);
+    } catch (e) { /* ignore */ }
+  }
+
+  function saveCategoryOrder() {
+    try {
+      localStorage.setItem(CATEGORY_ORDER_KEY, JSON.stringify(CATEGORIES.map(c => c.name)));
+    } catch (e) { /* ignore */ }
+  }
+
+  function enterReorderMode(activeIndex) {
+    isReorderMode = true;
+    const grid = $('#category-grid');
+    const bar = $('#reorder-bar');
+    if (grid) grid.classList.add('reorder-mode');
+    if (bar) bar.classList.remove('hidden');
+    if (activeIndex !== undefined && activeIndex !== null) {
+      const card = grid && grid.querySelector(`.category-card[data-index="${activeIndex}"]`);
+      if (card) card.classList.add('is-dragging');
+    }
+    if (navigator.vibrate) {
+      try { navigator.vibrate(30); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function exitReorderMode() {
+    if (!isReorderMode) return;
+    isReorderMode = false;
+    isDraggingCard = false;
+    dragSrcIndex = null;
+    const grid = $('#category-grid');
+    const bar = $('#reorder-bar');
+    if (grid) {
+      grid.classList.remove('reorder-mode');
+      grid.querySelectorAll('.category-card.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+    }
+    if (bar) bar.classList.add('hidden');
+    saveCategoryOrder();
+  }
+
+  function moveCategoryItem(fromIdx, toIdx) {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx >= CATEGORIES.length || toIdx >= CATEGORIES.length) return;
+    const [moved] = CATEGORIES.splice(fromIdx, 1);
+    CATEGORIES.splice(toIdx, 0, moved);
+    renderCategoryGrid();
+    const grid = $('#category-grid');
+    if (grid) {
+      const newCard = grid.querySelector(`.category-card[data-index="${toIdx}"]`);
+      if (newCard) newCard.classList.add('is-dragging');
+    }
+  }
+
   // ===== Init =====
   function init() {
+    loadCategoryOrder();
     renderCategoryGrid();
     updateClock();
     setInterval(updateClock, 1000);
@@ -71,6 +155,7 @@
 
   // ===== Navigation =====
   function showView(name, title) {
+    if (name !== 'main') exitReorderMode();
     Object.values(views).forEach(v => v.classList.remove('active'));
     views[name].classList.add('active');
     currentView = name;
@@ -101,22 +186,66 @@
   // ===== Render Subcategory =====
   function showSubcategory(catIndex) {
     const cat = CATEGORIES[catIndex];
+    currentCatIndex = catIndex;
+    currentSubParent = null;
+    selectedSubItems = [];
     $('#subcategory-title').textContent = `${cat.icon} ${cat.name}`;
     $('#subcategory-title').style.color = cat.color;
+    const multiActions = $('#subcategory-multi-actions');
+    if (multiActions) multiActions.classList.add('hidden');
     const grid = $('#subcategory-grid');
-    grid.innerHTML = cat.items.map((item, i) => `
-      <button class="subcategory-btn" data-cat="${catIndex}" data-item="${i}" id="sub-${catIndex}-${i}">
-        <span class="sub-dot" style="background:${cat.color}"></span>
-        ${item}
-      </button>
-    `).join('');
+    grid.classList.remove('area-grid');
+    grid.innerHTML = cat.items.map((item, i) => {
+      const label = typeof item === 'string' ? item : item.name;
+      const hasSub = typeof item === 'object' && Array.isArray(item.subItems) && item.subItems.length > 0;
+      const arrowHtml = hasSub ? '<span class="sub-arrow">›</span>' : '';
+      return `
+        <button class="subcategory-btn" data-cat="${catIndex}" data-item="${i}" id="sub-${catIndex}-${i}">
+          <span class="sub-dot" style="background:${cat.color}"></span>
+          <span class="sub-label">${label}</span>
+          ${arrowHtml}
+        </button>
+      `;
+    }).join('');
     showView('subcategory', cat.name);
   }
 
+  function updateSubConfirmBtn() {
+    const btn = $('#btn-subcategory-confirm');
+    if (!btn) return;
+    if (selectedSubItems.length > 0) {
+      btn.textContent = `✅ 決定（${selectedSubItems.join('・')}）`;
+    } else {
+      btn.textContent = 'このまま次へ（地域指定なし）';
+    }
+  }
+
+  function showSubSubcategory(catIndex, itemIndex) {
+    const cat = CATEGORIES[catIndex];
+    const item = cat.items[itemIndex];
+    currentCatIndex = catIndex;
+    currentSubParent = { index: itemIndex, name: item.name, subItems: item.subItems };
+    selectedSubItems = [];
+    $('#subcategory-title').textContent = `${cat.icon} ${item.name}（複数選択可）`;
+    $('#subcategory-title').style.color = cat.color;
+    const grid = $('#subcategory-grid');
+    grid.classList.add('area-grid');
+    grid.innerHTML = item.subItems.map((subName, subIdx) => `
+      <button class="subcategory-btn area-btn" data-cat="${catIndex}" data-item="${itemIndex}" data-subitem="${subIdx}" id="sub-${catIndex}-${itemIndex}-${subIdx}">
+        <span class="sub-dot" style="background:${cat.color}"></span>
+        <span class="sub-label">${subName}</span>
+      </button>
+    `).join('');
+    const multiActions = $('#subcategory-multi-actions');
+    if (multiActions) multiActions.classList.remove('hidden');
+    updateSubConfirmBtn();
+    showView('subcategory', item.name);
+  }
+
   // ===== Record Work =====
-  async function recordWork(category, subcategory, color, note, coWorkers) {
+  async function recordWork(category, subcategory, color, note, coWorkers, startTime) {
     try {
-      const res = await API.createRecord(category, subcategory, color, note, coWorkers);
+      const res = await API.createRecord(category, subcategory, color, note, coWorkers, startTime);
       if (res.success) {
         showToast(res.message);
         showView('main');
@@ -136,9 +265,16 @@
       <button type="button" class="coworker-btn" data-name="${name}">${name}</button>
     `).join('');
 
+    const defaultStartTime = nowTimeStr();
+
     overlay.innerHTML = `
       <div class="confirm-box note-dialog modal-content-scroll" style="max-height: 85vh; overflow-y: auto;">
         <p class="note-dialog-title">📝 ${subcategory}</p>
+
+        <div class="dialog-field" style="margin-top: 12px; text-align: left;">
+          <label class="dialog-label" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 6px;">⏰ 開始時間</label>
+          <input type="time" class="start-time-input time-input" value="${defaultStartTime}" style="padding: 10px 12px; font-size: 1rem;">
+        </div>
         
         <div class="dialog-field" style="margin-top: 12px; text-align: left;">
           <label class="dialog-label" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 6px;">👥 同行者 (複数選択可)</label>
@@ -190,6 +326,7 @@
 
     overlay.querySelector('.confirm-cancel').onclick = () => overlay.remove();
     overlay.querySelector('.note-ok-btn').onclick = () => {
+      const startTimeVal = overlay.querySelector('.start-time-input').value || nowTimeStr();
       // 選択された同行者
       const selected = Array.from(overlay.querySelectorAll('.coworker-btn.active')).map(btn => btn.dataset.name);
       // 手入力
@@ -200,7 +337,7 @@
       const note = inputBtn.classList.contains('active') ? textarea.value.trim() || null : null;
 
       overlay.remove();
-      recordWork(category, subcategory, color, note, coWorkers);
+      recordWork(category, subcategory, color, note, coWorkers, startTimeVal);
     };
   }
 
@@ -1341,6 +1478,11 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  function nowTimeStr() {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
   // ===== Event Bindings =====
   function bindEvents() {
     // Transfer Needed Days
@@ -1351,19 +1493,149 @@
 
     // Back button
     $('#btn-back').addEventListener('click', () => {
-      if (currentView === 'calendar') showSchedule();
-      else showView('main');
+      if (currentView === 'calendar') {
+        showSchedule();
+      } else if (currentView === 'subcategory' && currentSubParent !== null) {
+        showSubcategory(currentCatIndex);
+      } else {
+        showView('main');
+      }
     });
 
+    // Category Reorder Mode (Long Press + Drag)
+    const categoryGrid = $('#category-grid');
+    let pressTimer = null;
+    let pressStartX = 0;
+    let pressStartY = 0;
+
+    const clearPressTimer = () => {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    };
+
+    const handleDragMove = (clientX, clientY, e) => {
+      if (!isDraggingCard || dragSrcIndex === null) return;
+      if (e && e.cancelable) e.preventDefault();
+      const el = document.elementFromPoint(clientX, clientY);
+      const targetCard = el ? el.closest('#category-grid .category-card') : null;
+      if (!targetCard) return;
+      const targetIdx = parseInt(targetCard.dataset.index);
+      if (!isNaN(targetIdx) && targetIdx !== dragSrcIndex) {
+        moveCategoryItem(dragSrcIndex, targetIdx);
+        dragSrcIndex = targetIdx;
+      }
+    };
+
+    const finishDrag = () => {
+      clearPressTimer();
+      if (isDraggingCard) {
+        isDraggingCard = false;
+        dragSrcIndex = null;
+        categoryGrid.querySelectorAll('.category-card.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+        saveCategoryOrder();
+      }
+    };
+
+    categoryGrid.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) {
+        clearPressTimer();
+        return;
+      }
+      const card = e.target.closest('.category-card');
+      if (!card) return;
+      const idx = parseInt(card.dataset.index);
+      const touch = e.touches[0];
+      pressStartX = touch.clientX;
+      pressStartY = touch.clientY;
+
+      if (isReorderMode) {
+        dragSrcIndex = idx;
+        isDraggingCard = true;
+        card.classList.add('is-dragging');
+      } else {
+        clearPressTimer();
+        pressTimer = setTimeout(() => {
+          suppressNextClick = true;
+          dragSrcIndex = idx;
+          isDraggingCard = true;
+          enterReorderMode(idx);
+        }, 420);
+      }
+    }, { passive: true });
+
+    categoryGrid.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      if (!isDraggingCard && pressTimer) {
+        if (Math.hypot(touch.clientX - pressStartX, touch.clientY - pressStartY) > 10) {
+          clearPressTimer();
+        }
+      }
+      if (isDraggingCard) {
+        handleDragMove(touch.clientX, touch.clientY, e);
+      }
+    }, { passive: false });
+
+    categoryGrid.addEventListener('touchend', finishDrag);
+    categoryGrid.addEventListener('touchcancel', finishDrag);
+
+    // PC向けマウス長押し＋ドラッグ対応
+    categoryGrid.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      const card = e.target.closest('.category-card');
+      if (!card) return;
+      const idx = parseInt(card.dataset.index);
+      pressStartX = e.clientX;
+      pressStartY = e.clientY;
+
+      if (isReorderMode) {
+        dragSrcIndex = idx;
+        isDraggingCard = true;
+        card.classList.add('is-dragging');
+      } else {
+        clearPressTimer();
+        pressTimer = setTimeout(() => {
+          suppressNextClick = true;
+          dragSrcIndex = idx;
+          isDraggingCard = true;
+          enterReorderMode(idx);
+        }, 420);
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDraggingCard && pressTimer) {
+        if (Math.hypot(e.clientX - pressStartX, e.clientY - pressStartY) > 8) {
+          clearPressTimer();
+        }
+      }
+      if (isDraggingCard) {
+        handleDragMove(e.clientX, e.clientY, e);
+      }
+    });
+
+    window.addEventListener('mouseup', finishDrag);
+
+    if ($('#btn-reorder-done')) {
+      $('#btn-reorder-done').addEventListener('click', exitReorderMode);
+    }
+
     // Category card click
-    $('#category-grid').addEventListener('click', (e) => {
+    categoryGrid.addEventListener('click', (e) => {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
+      if (isReorderMode) return;
       const card = e.target.closest('.category-card');
       if (!card) return;
       const idx = parseInt(card.dataset.index);
       const cat = CATEGORIES[idx];
       if (cat.items.length === 0) {
         showNoteDialog(cat.name, cat.name, cat.color);
-      } else if (cat.items.length === 1) {
+      } else if (cat.items.length === 1 && typeof cat.items[0] === 'string') {
         showNoteDialog(cat.name, cat.items[0], cat.color);
       } else {
         showSubcategory(idx);
@@ -1377,8 +1649,37 @@
       const catIdx = parseInt(btn.dataset.cat);
       const itemIdx = parseInt(btn.dataset.item);
       const cat = CATEGORIES[catIdx];
-      showNoteDialog(cat.name, cat.items[itemIdx], cat.color);
+      const item = cat.items[itemIdx];
+
+      if (btn.dataset.subitem !== undefined) {
+        const subIdx = parseInt(btn.dataset.subitem);
+        const subName = item.subItems[subIdx];
+        btn.classList.toggle('active');
+        if (btn.classList.contains('active')) {
+          if (!selectedSubItems.includes(subName)) selectedSubItems.push(subName);
+        } else {
+          selectedSubItems = selectedSubItems.filter(s => s !== subName);
+        }
+        updateSubConfirmBtn();
+      } else if (typeof item === 'object' && Array.isArray(item.subItems) && item.subItems.length > 0) {
+        showSubSubcategory(catIdx, itemIdx);
+      } else {
+        const label = typeof item === 'string' ? item : item.name;
+        showNoteDialog(cat.name, label, cat.color);
+      }
     });
+
+    // Subcategory multi-select confirm button
+    if ($('#btn-subcategory-confirm')) {
+      $('#btn-subcategory-confirm').addEventListener('click', () => {
+        if (currentCatIndex === null || !currentSubParent) return;
+        const cat = CATEGORIES[currentCatIndex];
+        const subLabel = selectedSubItems.length > 0
+          ? `${currentSubParent.name} - ${selectedSubItems.join(', ')}`
+          : currentSubParent.name;
+        showNoteDialog(cat.name, subLabel, cat.color);
+      });
+    }
 
     // Bottom actions
     $('#btn-timeline').addEventListener('click', () => showTimeline());
@@ -1526,6 +1827,169 @@
     }
     $('#btn-copy-photo-next-week').addEventListener('click', copyPhotoToNextWeek);
 
+    // スケジュール写真のタップ拡大（全画面ライトボックス）＆ピンチ操作
+    let lbScale = 1;
+    let lbTx = 0;
+    let lbTy = 0;
+
+    function updateLightboxTransform() {
+      const img = $('#photo-lightbox-img');
+      const resetBtn = $('#btn-lightbox-reset');
+      if (!img) return;
+      if (lbScale <= 1.01) {
+        lbScale = 1;
+        lbTx = 0;
+        lbTy = 0;
+        img.style.transform = '';
+        if (resetBtn) resetBtn.classList.add('hidden');
+      } else {
+        img.style.transform = `translate(${lbTx}px, ${lbTy}px) scale(${lbScale})`;
+        if (resetBtn) resetBtn.classList.remove('hidden');
+      }
+    }
+
+    function resetLightboxZoom() {
+      lbScale = 1;
+      lbTx = 0;
+      lbTy = 0;
+      updateLightboxTransform();
+    }
+
+    function openPhotoLightbox(src) {
+      if (!src) return;
+      const lb = $('#photo-lightbox');
+      const img = $('#photo-lightbox-img');
+      if (!lb || !img) return;
+      img.src = src;
+      resetLightboxZoom();
+      lb.classList.remove('hidden');
+    }
+
+    function closePhotoLightbox() {
+      const lb = $('#photo-lightbox');
+      if (lb) lb.classList.add('hidden');
+      resetLightboxZoom();
+    }
+
+    if ($('#btn-lightbox-close')) {
+      $('#btn-lightbox-close').addEventListener('click', closePhotoLightbox);
+    }
+    if ($('#btn-lightbox-reset')) {
+      $('#btn-lightbox-reset').addEventListener('click', resetLightboxZoom);
+    }
+
+    const lbStage = $('#photo-lightbox-stage');
+    if (lbStage) {
+      let lbPinching = false;
+      let lbDragging = false;
+      let lbStartDist = 0;
+      let lbStartScale = 1;
+      let lbDragStartX = 0;
+      let lbDragStartY = 0;
+      let lbStartTx = 0;
+      let lbStartTy = 0;
+      let lbLastTap = 0;
+
+      const getDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+      lbStage.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          lbPinching = true;
+          lbDragging = false;
+          lbStartDist = getDist(e.touches[0], e.touches[1]);
+          lbStartScale = lbScale;
+          lbStartTx = lbTx;
+          lbStartTy = lbTy;
+        } else if (e.touches.length === 1) {
+          const now = Date.now();
+          if (now - lbLastTap < 300) {
+            e.preventDefault();
+            if (lbScale > 1.05) {
+              resetLightboxZoom();
+            } else {
+              lbScale = 2.5;
+              lbTx = 0;
+              lbTy = 0;
+              updateLightboxTransform();
+            }
+            lbLastTap = 0;
+            return;
+          }
+          lbLastTap = now;
+          if (lbScale > 1.01) {
+            e.preventDefault();
+            lbDragging = true;
+            lbDragStartX = e.touches[0].clientX;
+            lbDragStartY = e.touches[0].clientY;
+            lbStartTx = lbTx;
+            lbStartTy = lbTy;
+          }
+        }
+      }, { passive: false });
+
+      lbStage.addEventListener('touchmove', (e) => {
+        if (lbPinching && e.touches.length === 2) {
+          e.preventDefault();
+          const dist = getDist(e.touches[0], e.touches[1]);
+          if (lbStartDist > 0) {
+            const newScale = Math.min(6, Math.max(1, lbStartScale * (dist / lbStartDist)));
+            const ratio = newScale / lbStartScale;
+            lbScale = newScale;
+            const maxPanX = (lbStage.clientWidth * (lbScale - 1)) / 2 + 80;
+            const maxPanY = (lbStage.clientHeight * (lbScale - 1)) / 2 + 80;
+            lbTx = Math.min(maxPanX, Math.max(-maxPanX, lbStartTx * ratio));
+            lbTy = Math.min(maxPanY, Math.max(-maxPanY, lbStartTy * ratio));
+            updateLightboxTransform();
+          }
+        } else if (lbDragging && e.touches.length === 1 && lbScale > 1.01) {
+          e.preventDefault();
+          const dx = e.touches[0].clientX - lbDragStartX;
+          const dy = e.touches[0].clientY - lbDragStartY;
+          const maxPanX = (lbStage.clientWidth * (lbScale - 1)) / 2 + 80;
+          const maxPanY = (lbStage.clientHeight * (lbScale - 1)) / 2 + 80;
+          lbTx = Math.min(maxPanX, Math.max(-maxPanX, lbStartTx + dx));
+          lbTy = Math.min(maxPanY, Math.max(-maxPanY, lbStartTy + dy));
+          updateLightboxTransform();
+        }
+      }, { passive: false });
+
+      lbStage.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+          lbPinching = false;
+        }
+        if (e.touches.length === 1 && lbScale > 1.01) {
+          lbDragging = true;
+          lbDragStartX = e.touches[0].clientX;
+          lbDragStartY = e.touches[0].clientY;
+          lbStartTx = lbTx;
+          lbStartTy = lbTy;
+        } else if (e.touches.length === 0) {
+          lbDragging = false;
+          if (lbScale <= 1.02) {
+            resetLightboxZoom();
+          }
+        }
+      });
+
+      // PC向けホイール拡大縮小
+      lbStage.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 1.15 : 0.87;
+        lbScale = Math.min(6, Math.max(1, lbScale * delta));
+        updateLightboxTransform();
+      }, { passive: false });
+    }
+
+    const schedImgEl = $('#sched-photo-img');
+    if (schedImgEl) {
+      schedImgEl.addEventListener('click', (e) => {
+        if (schedZoomScale <= 1.01 && schedImgEl.getAttribute('src')) {
+          openPhotoLightbox(schedImgEl.src);
+        }
+      });
+    }
+
     // スケジュール写真のピンチアウト・ピンチイン拡大縮小 & ドラッグ移動
     const photoWrap = $('#sched-photo-preview');
     if (photoWrap) {
@@ -1646,6 +2110,304 @@
     $('#btn-cal-day-cancel').addEventListener('click', closeCalendarDayModal);
     $('#btn-cal-day-save').addEventListener('click', saveCalendarDayModal);
     $('.calendar-day-modal-backdrop').addEventListener('click', closeCalendarDayModal);
+
+    // ===== Voice Quick Record (Speech Recognition & Auto Classification) =====
+    const VOICE_RULES = [
+      // ビール仕込み補助
+      { category: 'ビール仕込み補助', subcategory: '麦芽粉砕', color: '#f5c542', keys: ['麦芽粉砕', 'ばくがふんさい', '粉砕', 'ふんさい', 'モルト粉砕'] },
+      { category: 'ビール仕込み補助', subcategory: '麦芽粕取り', color: '#f5c542', keys: ['麦芽粕取り', '麦芽かす取り', 'かす取り', '粕取り', 'かすとり', '麦芽粕', 'ばくがかす'] },
+      { category: 'ビール仕込み補助', subcategory: '麦芽受け入れ', color: '#f5c542', keys: ['麦芽受け入れ', '麦芽受入', '受け入れ', '受入', 'うけいれ'] },
+      { category: 'ビール仕込み補助', subcategory: '濾過', color: '#f5c542', keys: ['濾過', 'ろか', 'ロカ', 'フィルタ'] },
+      { category: 'ビール仕込み補助', subcategory: 'タンクのガス充填', color: '#f5c542', keys: ['タンクのガス充填', 'ガス充填', 'がすじゅうてん', '炭酸ガス', '充填'] },
+      { category: 'ビール仕込み補助', subcategory: '火入れ補助', color: '#f5c542', keys: ['火入れ補助', '火入れ', 'ひいれ'] },
+      { category: 'ビール仕込み補助', subcategory: 'タンク洗い補助', color: '#f5c542', keys: ['タンク洗い補助', 'タンク洗い', 'タンク洗浄', 'たんくあらい', 'タンク洗'] },
+
+      // 日本酒仕込み
+      { category: '日本酒仕込み', subcategory: '洗米', color: '#4db6ac', keys: ['洗米', 'せんまい', '米洗い', 'こめあらい'] },
+      { category: '日本酒仕込み', subcategory: '蒸し米', color: '#4db6ac', keys: ['蒸し米', 'むしまい', '蒸米', '蒸し', 'むし'] },
+      { category: '日本酒仕込み', subcategory: '引き込み', color: '#4db6ac', keys: ['引き込み', 'ひきこみ', '引込'] },
+      { category: '日本酒仕込み', subcategory: '盛り', color: '#4db6ac', keys: ['盛り', 'もり', '麹盛り'] },
+      { category: '日本酒仕込み', subcategory: '出麹', color: '#4db6ac', keys: ['出麹', 'でこうじ', '出こうじ', 'でぐち'] },
+      { category: '日本酒仕込み', subcategory: '仕込み', color: '#4db6ac', keys: ['仕込み', 'しこみ', '日本酒仕込み', 'もろみ'] },
+      { category: '日本酒仕込み', subcategory: '掛け米', color: '#4db6ac', keys: ['掛け米', 'かけまい', '掛米'] },
+
+      // 出荷対応
+      { category: '出荷対応', subcategory: '朝一出荷対応', color: '#8bc34a', keys: ['朝一出荷対応', '朝一出荷', '朝一', 'あさいち', 'デリコ'] },
+      { category: '出荷対応', subcategory: '県販・個人出荷対応', color: '#8bc34a', isAreaShip: true, keys: ['県販・個人出荷対応', '県販出荷', '個人出荷', '県販', 'けんぱん', '個人', 'こじん'] },
+      { category: '出荷対応', subcategory: '配達', color: '#8bc34a', keys: ['配達', 'はいたつ', '配送', '届け'] },
+
+      // 在庫作り
+      { category: '在庫作り', subcategory: 'ラベル貼り', color: '#9e9e9e', keys: ['ラベル貼り', 'らべるはり', 'ラベル', 'らべる'] },
+      { category: '在庫作り', subcategory: '箱詰め作業', color: '#9e9e9e', keys: ['箱詰め作業', '箱詰め', 'はこづめ', '箱詰'] },
+      { category: '在庫作り', subcategory: 'その他', color: '#9e9e9e', keys: ['在庫作り', 'ざいこづくり', '在庫'] },
+
+      // 詰め作業
+      { category: '詰め作業', subcategory: '缶ビール', color: '#42a5f5', keys: ['缶ビール', 'かんびーる', '缶詰め', '缶詰', 'かんづめ', '缶'] },
+      { category: '詰め作業', subcategory: '瓶ビール', color: '#42a5f5', keys: ['瓶ビール', 'びんびーる', 'ビンビール', '瓶詰め', '瓶詰', 'びんづめ', '瓶'] },
+      { category: '詰め作業', subcategory: 'ビールPET', color: '#42a5f5', keys: ['ビールPET', 'ペットボトル', 'ペット', 'PET'] },
+      { category: '詰め作業', subcategory: '日本酒', color: '#42a5f5', keys: ['日本酒詰め', '日本酒の詰め', '一升瓶', '四合瓶'] },
+
+      // その他共通
+      { category: 'その他共通', subcategory: '会議・打ち合わせ', color: '#e0e0e0', keys: ['会議・打ち合わせ', '会議', 'かいぎ', '打ち合わせ', 'うちあわせ', '打合せ', 'ミーティング'] },
+      { category: 'その他共通', subcategory: '休憩', color: '#e0e0e0', keys: ['休憩', 'きゅうけい', '休み', 'やすみ', '昼休み', 'ひるやすみ'] },
+      { category: 'その他共通', subcategory: '売店', color: '#e0e0e0', keys: ['売店', 'ばいてん', 'ショップ', '店頭', '接客', 'レジ'] },
+      { category: 'その他共通', subcategory: '事務関係', color: '#e0e0e0', keys: ['事務関係', '事務', 'じむ', '経理', '伝票', 'パソコン'] },
+      { category: 'その他共通', subcategory: '資料作成', color: '#e0e0e0', keys: ['資料作成', 'しりょうさくせい', '資料', '書類作成'] },
+      { category: 'その他共通', subcategory: '運搬', color: '#e0e0e0', keys: ['運搬', 'うんぱん', '移動', '積み込み', '荷物運び'] }
+    ];
+
+    const AREA_ALIASES = [
+      { name: '長野', keys: ['長野', 'ながの'] },
+      { name: '松本', keys: ['松本', 'まつもと'] },
+      { name: '上田', keys: ['上田', 'うえだ'] },
+      { name: '飯田', keys: ['飯田', 'いいだ'] },
+      { name: '諏訪', keys: ['諏訪', 'すわ'] },
+      { name: '佐久', keys: ['佐久', 'さく'] },
+      { name: '伊那', keys: ['伊那', 'いな'] }
+    ];
+
+    function extractTimeFromVoice(text) {
+      const normalized = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+      // HH:MM 形式
+      let m = normalized.match(/(\d{1,2})\s*[:：]\s*(\d{2})/);
+      if (m) {
+        const h = Math.min(23, parseInt(m[1], 10));
+        const min = Math.min(59, parseInt(m[2], 10));
+        return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      }
+      // 午後/午前 + N時(M分|半)
+      m = normalized.match(/(午後|午前)?\s*(\d{1,2})\s*時\s*(?:(\d{1,2})\s*分|(半))?/);
+      if (m) {
+        let h = parseInt(m[2], 10);
+        if (m[1] === '午後' && h < 12) h += 12;
+        if (m[1] === '午前' && h === 12) h = 0;
+        let min = 0;
+        if (m[3]) min = Math.min(59, parseInt(m[3], 10));
+        else if (m[4]) min = 30;
+        h = Math.min(23, h);
+        return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      }
+      return nowTimeStr();
+    }
+
+    function extractCoworkersFromVoice(text) {
+      const found = [];
+      COWORKERS.forEach(name => {
+        if (name === '林(麗)') {
+          if (text.includes('林')) found.push(name);
+        } else if (text.includes(name)) {
+          found.push(name);
+        }
+      });
+      return found.length > 0 ? found.join(', ') : null;
+    }
+
+    function parseVoiceCommand(rawText) {
+      const text = (rawText || '').trim();
+      const lower = text.toLowerCase();
+
+      // 地域名抽出
+      const matchedAreas = [];
+      AREA_ALIASES.forEach(a => {
+        if (a.keys.some(k => lower.includes(k.toLowerCase()))) {
+          matchedAreas.push(a.name);
+        }
+      });
+
+      // ルールマッチング（最長キーワード優先スコア）
+      let bestRule = null;
+      let bestScore = 0;
+      VOICE_RULES.forEach(rule => {
+        let ruleScore = 0;
+        rule.keys.forEach(k => {
+          if (lower.includes(k.toLowerCase())) {
+            ruleScore = Math.max(ruleScore, k.length);
+          }
+        });
+        if (ruleScore > bestScore) {
+          bestScore = ruleScore;
+          bestRule = rule;
+        }
+      });
+
+      // 地域名が含まれており「出荷/発送」がある場合や「県販・個人出荷対応」が選ばれた場合
+      if ((!bestRule && matchedAreas.length > 0) || (bestRule && bestRule.isAreaShip)) {
+        const sub = matchedAreas.length > 0
+          ? `県販・個人出荷対応 - ${matchedAreas.join(', ')}`
+          : '県販・個人出荷対応';
+        return {
+          category: '出荷対応',
+          subcategory: sub,
+          color: '#8bc34a',
+          note: `🎤 ${text}`,
+          coWorkers: extractCoworkersFromVoice(text),
+          startTime: extractTimeFromVoice(text)
+        };
+      }
+
+      if (bestRule) {
+        return {
+          category: bestRule.category,
+          subcategory: bestRule.subcategory,
+          color: bestRule.color,
+          note: `🎤 ${text}`,
+          coWorkers: extractCoworkersFromVoice(text),
+          startTime: extractTimeFromVoice(text)
+        };
+      }
+
+      // 判別できない場合は「その他共通 - その他」に原文そのまま保存
+      return {
+        category: 'その他共通',
+        subcategory: 'その他',
+        color: '#e0e0e0',
+        note: `🎤 ${text}`,
+        coWorkers: extractCoworkersFromVoice(text),
+        startTime: extractTimeFromVoice(text)
+      };
+    }
+
+    let voiceRecognition = null;
+    let voiceCurrentText = '';
+    let voiceSubmitted = false;
+
+    function closeVoiceModal() {
+      if (voiceRecognition) {
+        try { voiceRecognition.abort(); } catch (e) { /* ignore */ }
+        voiceRecognition = null;
+      }
+      $('#voice-modal').classList.add('hidden');
+      $('#voice-pulse-wrap').classList.add('stopped');
+    }
+
+    async function submitVoiceText(rawText) {
+      if (voiceSubmitted) return;
+      const text = (rawText || '').trim();
+      if (!text) {
+        showToast('音声または文字が入力されていません');
+        return;
+      }
+      voiceSubmitted = true;
+      closeVoiceModal();
+
+      const parsed = parseVoiceCommand(text);
+      try {
+        const res = await API.createRecord(
+          parsed.category,
+          parsed.subcategory,
+          parsed.color,
+          parsed.note,
+          parsed.coWorkers,
+          parsed.startTime
+        );
+        if (res.success) {
+          showToast(`🎤 ${parsed.category} - ${parsed.subcategory} (${parsed.startTime}〜)`);
+          checkCurrentWork();
+        }
+      } catch (e) {
+        showToast('音声記録の保存に失敗しました');
+      }
+    }
+
+    function openVoiceModal() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      voiceCurrentText = '';
+      voiceSubmitted = false;
+
+      const modal = $('#voice-modal');
+      const statusEl = $('#voice-status-text');
+      const boxEl = $('#voice-transcript-box');
+      const pulseEl = $('#voice-pulse-wrap');
+      const fallbackWrap = $('#voice-fallback-wrap');
+      const fallbackInput = $('#voice-fallback-input');
+
+      boxEl.textContent = '例：「洗米始めます」「長野と松本に県販出荷」';
+      boxEl.classList.remove('has-text');
+      fallbackWrap.classList.add('hidden');
+      fallbackInput.value = '';
+      modal.classList.remove('hidden');
+
+      if (!SpeechRecognition) {
+        pulseEl.classList.add('stopped');
+        statusEl.textContent = 'このブラウザは音声認識に非対応です';
+        fallbackWrap.classList.remove('hidden');
+        setTimeout(() => fallbackInput.focus(), 100);
+        return;
+      }
+
+      pulseEl.classList.remove('stopped');
+      statusEl.textContent = 'お話しください...';
+
+      try {
+        voiceRecognition = new SpeechRecognition();
+        voiceRecognition.lang = 'ja-JP';
+        voiceRecognition.interimResults = true;
+        voiceRecognition.continuous = false;
+
+        voiceRecognition.onresult = (event) => {
+          let interim = '';
+          let finalStr = '';
+          for (let i = 0; i < event.results.length; i++) {
+            const res = event.results[i];
+            if (res.isFinal) {
+              finalStr += res[0].transcript;
+            } else {
+              interim += res[0].transcript;
+            }
+          }
+          const combined = (finalStr || interim).trim();
+          if (combined) {
+            voiceCurrentText = combined;
+            boxEl.textContent = combined;
+            boxEl.classList.add('has-text');
+          }
+          if (finalStr.trim()) {
+            submitVoiceText(finalStr.trim());
+          }
+        };
+
+        voiceRecognition.onerror = (event) => {
+          pulseEl.classList.add('stopped');
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            statusEl.textContent = 'マイクの許可が必要です';
+          } else if (event.error === 'no-speech') {
+            statusEl.textContent = '音声が検出されませんでした';
+          } else {
+            statusEl.textContent = '音声認識エラー（手入力も可）';
+          }
+          fallbackWrap.classList.remove('hidden');
+        };
+
+        voiceRecognition.onend = () => {
+          pulseEl.classList.add('stopped');
+          if (!voiceSubmitted && voiceCurrentText) {
+            submitVoiceText(voiceCurrentText);
+          }
+        };
+
+        voiceRecognition.start();
+      } catch (e) {
+        pulseEl.classList.add('stopped');
+        statusEl.textContent = '音声認識を開始できませんでした';
+        fallbackWrap.classList.remove('hidden');
+      }
+    }
+
+    if ($('#btn-voice-record')) {
+      $('#btn-voice-record').addEventListener('click', openVoiceModal);
+    }
+    if ($('#btn-voice-cancel')) {
+      $('#btn-voice-cancel').addEventListener('click', closeVoiceModal);
+    }
+    if ($('.voice-modal-backdrop')) {
+      $('.voice-modal-backdrop').addEventListener('click', closeVoiceModal);
+    }
+    if ($('#btn-voice-submit')) {
+      $('#btn-voice-submit').addEventListener('click', () => {
+        const fallbackVal = $('#voice-fallback-input') ? $('#voice-fallback-input').value.trim() : '';
+        submitVoiceText(fallbackVal || voiceCurrentText);
+      });
+    }
   }
 
   // ===== Start =====
