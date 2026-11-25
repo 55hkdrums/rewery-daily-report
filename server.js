@@ -19,10 +19,12 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/records', async (req, res) => {
   try {
-    const { category, subcategory, color, note, co_workers } = req.body;
+    const { category, subcategory, color, note, co_workers, start_time } = req.body;
     const now = new Date();
     const date = formatDate(now);
-    const startTime = formatTime(now);
+    const startTime = (typeof start_time === 'string' && /^\d{2}:\d{2}$/.test(start_time))
+      ? start_time
+      : formatTime(now);
 
     const openRecord = await queryOne(
       'SELECT * FROM work_records WHERE date = ? AND end_time IS NULL ORDER BY id DESC LIMIT 1', [date]
@@ -41,7 +43,7 @@ app.post('/api/records', async (req, res) => {
 
     res.json({
       success: true,
-      message: `${category}${subcategory ? ' - ' + subcategory : ''} を記録しました`,
+      message: `${category}${subcategory ? ' - ' + subcategory : ''} (${startTime}〜) を記録しました`,
       closedPrevious
     });
   } catch (err) {
