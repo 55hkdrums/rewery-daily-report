@@ -331,6 +331,62 @@ input { font-family: inherit; }
   border-color: rgba(66, 165, 245, 0.45);
 }
 .voice-fallback-wrap { margin-top: 10px; }
+.voice-result-panel {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  text-align: left;
+}
+.voice-detected-label {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.voice-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.voice-cand-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: left;
+  transition: var(--transition);
+}
+.voice-cand-btn.active {
+  background: rgba(76, 175, 80, 0.18);
+  border-color: #66bb6a;
+  color: #c8e6c9;
+}
+.voice-cand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.voice-meta-info {
+  margin-top: 6px;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+.voice-perm-hint {
+  margin-top: 10px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
 .voice-submit-btn {
   background: rgba(76, 175, 80, 0.22) !important;
   color: #81c784 !important;
