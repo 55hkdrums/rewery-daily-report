@@ -399,11 +399,17 @@
           <div class="voice-mic-circle">🎤</div>
         </div>
         <p id="voice-status-text" class="voice-status-text">お話しください...</p>
-        <div id="voice-transcript-box" class="voice-transcript-box">例：「洗米始めます」「長野と松本に県販出荷」</div>
-        <div id="voice-fallback-wrap" class="voice-fallback-wrap hidden">
-          <input type="text" id="voice-fallback-input" class="time-input" placeholder="内容を入力して登録..." style="font-size:0.95rem;">
+        <div id="voice-transcript-box" class="voice-transcript-box">例：「洗米始めます」「タンクの中を洗います」「長野と松本に出荷」</div>
+        <div id="voice-result-panel" class="voice-result-panel hidden">
+          <div class="voice-detected-label">判別結果（タップで変更可）</div>
+          <div id="voice-candidates" class="voice-candidates"></div>
+          <div id="voice-meta-info" class="voice-meta-info"></div>
         </div>
-        <div class="confirm-actions" style="margin-top: 16px;">
+        <div id="voice-fallback-wrap" class="voice-fallback-wrap hidden">
+          <input type="text" id="voice-fallback-input" class="time-input" placeholder="文字やキーボードのマイクで入力..." style="font-size:0.95rem;">
+        </div>
+        <p class="voice-perm-hint">💡 毎回許可が出る場合は、ブラウザのサイト設定でマイクを「許可」にしてください</p>
+        <div class="confirm-actions" style="margin-top: 12px;">
           <button id="btn-voice-cancel" class="confirm-btn confirm-cancel" type="button">キャンセル</button>
           <button id="btn-voice-submit" class="confirm-btn confirm-ok voice-submit-btn" type="button">登録する</button>
         </div>
