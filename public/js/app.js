@@ -2111,71 +2111,191 @@
     $('#btn-cal-day-save').addEventListener('click', saveCalendarDayModal);
     $('.calendar-day-modal-backdrop').addEventListener('click', closeCalendarDayModal);
 
-    // ===== Voice Quick Record (Speech Recognition & Auto Classification) =====
+    // ===== Voice Quick Record (Speech Recognition & Smart Classification) =====
+    function normalizeVoiceText(str) {
+      return (str || '')
+        .replace(/[ァ-ヶ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60))
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+        .replace(/[、。・！？!?\s　]/g, '')
+        .toLowerCase();
+    }
+
     const VOICE_RULES = [
       // ビール仕込み補助
-      { category: 'ビール仕込み補助', subcategory: '麦芽粉砕', color: '#f5c542', keys: ['麦芽粉砕', 'ばくがふんさい', '粉砕', 'ふんさい', 'モルト粉砕'] },
-      { category: 'ビール仕込み補助', subcategory: '麦芽粕取り', color: '#f5c542', keys: ['麦芽粕取り', '麦芽かす取り', 'かす取り', '粕取り', 'かすとり', '麦芽粕', 'ばくがかす'] },
-      { category: 'ビール仕込み補助', subcategory: '麦芽受け入れ', color: '#f5c542', keys: ['麦芽受け入れ', '麦芽受入', '受け入れ', '受入', 'うけいれ'] },
-      { category: 'ビール仕込み補助', subcategory: '濾過', color: '#f5c542', keys: ['濾過', 'ろか', 'ロカ', 'フィルタ'] },
-      { category: 'ビール仕込み補助', subcategory: 'タンクのガス充填', color: '#f5c542', keys: ['タンクのガス充填', 'ガス充填', 'がすじゅうてん', '炭酸ガス', '充填'] },
-      { category: 'ビール仕込み補助', subcategory: '火入れ補助', color: '#f5c542', keys: ['火入れ補助', '火入れ', 'ひいれ'] },
-      { category: 'ビール仕込み補助', subcategory: 'タンク洗い補助', color: '#f5c542', keys: ['タンク洗い補助', 'タンク洗い', 'タンク洗浄', 'たんくあらい', 'タンク洗'] },
+      {
+        category: 'ビール仕込み補助', subcategory: '麦芽粉砕', color: '#f5c542',
+        keys: ['麦芽粉砕', 'ばくがふんさい', '粉砕', 'ふんさい', 'もるとふんさい', 'ばくがをくだく', 'ばくがのふんさい', '爆画粉砕', '麦が粉砕'],
+        combos: [[['麦芽', 'ばくが', 'もると', '麦'], ['粉砕', 'ふんさい', '砕', 'くだ', '挽', 'ひく']]]
+      },
+      {
+        category: 'ビール仕込み補助', subcategory: '麦芽粕取り', color: '#f5c542',
+        keys: ['麦芽粕取り', '麦芽かす取り', 'かす取り', '粕取り', 'かすとり', '麦芽粕', 'ばくがかす', 'かすだし', '粕出し', 'かすふくろ', '粕袋'],
+        combos: [[['麦芽', 'ばくが', 'もると', 'かす', '粕'], ['取', 'と', '出', 'だ', '袋', '片付']]]
+      },
+      {
+        category: 'ビール仕込み補助', subcategory: '麦芽受け入れ', color: '#f5c542',
+        keys: ['麦芽受け入れ', '麦芽受入', '受け入れ', '受入', 'うけいれ', 'ばくががとどく', '麦芽到着'],
+        combos: [[['麦芽', 'ばくが', 'もると'], ['受', 'うけ', '入', '届', '搬入', '納品']]]
+      },
+      {
+        category: 'ビール仕込み補助', subcategory: '濾過', color: '#f5c542',
+        keys: ['濾過', 'ろか', 'ふぃるた', 'ろかさぎょう', '廊下', 'ろうか', '濾過機'],
+        combos: [[['びーる', 'ビール', 'さけ', '酒', 'たんく'], ['ろか', '濾過', 'ふぃるた', 'こす']]]
+      },
+      {
+        category: 'ビール仕込み補助', subcategory: 'タンクのガス充填', color: '#f5c542',
+        keys: ['タンクのガス充填', 'ガス充填', 'がすじゅうてん', '炭酸ガス', '二酸化炭素', 'がすいれ', 'ガス入れ', 'がすをいれ', 'ガスを入れ'],
+        combos: [[['たんく', 'タンク', 'がす', 'ガス', '炭酸'], ['充填', 'じゅうてん', 'いれ', '入れ', '補充']]]
+      },
+      {
+        category: 'ビール仕込み補助', subcategory: '火入れ補助', color: '#f5c542',
+        keys: ['火入れ補助', '火入れ', 'ひいれ', 'ひいれほじょ', '日入れ', '殺菌', 'ぱすとらい'],
+        combos: [[['火', 'ひ', '日'], ['いれ', '入れ']]]
+      },
+      {
+        category: 'ビール仕込み補助', subcategory: 'タンク洗い補助', color: '#f5c542',
+        keys: ['タンク洗い補助', 'タンク洗い', 'タンク洗浄', 'たんくあらい', 'タンク洗', 'たんくせんじょう', 'たんくそうじ', 'タンク掃除'],
+        combos: [[['たんく', 'タンク'], ['あら', '洗', '洗浄', 'せんじょう', 'そうじ', '掃除', 'きれい']]]
+      },
 
       // 日本酒仕込み
-      { category: '日本酒仕込み', subcategory: '洗米', color: '#4db6ac', keys: ['洗米', 'せんまい', '米洗い', 'こめあらい'] },
-      { category: '日本酒仕込み', subcategory: '蒸し米', color: '#4db6ac', keys: ['蒸し米', 'むしまい', '蒸米', '蒸し', 'むし'] },
-      { category: '日本酒仕込み', subcategory: '引き込み', color: '#4db6ac', keys: ['引き込み', 'ひきこみ', '引込'] },
-      { category: '日本酒仕込み', subcategory: '盛り', color: '#4db6ac', keys: ['盛り', 'もり', '麹盛り'] },
-      { category: '日本酒仕込み', subcategory: '出麹', color: '#4db6ac', keys: ['出麹', 'でこうじ', '出こうじ', 'でぐち'] },
-      { category: '日本酒仕込み', subcategory: '仕込み', color: '#4db6ac', keys: ['仕込み', 'しこみ', '日本酒仕込み', 'もろみ'] },
-      { category: '日本酒仕込み', subcategory: '掛け米', color: '#4db6ac', keys: ['掛け米', 'かけまい', '掛米'] },
+      {
+        category: '日本酒仕込み', subcategory: '洗米', color: '#4db6ac',
+        keys: ['洗米', 'せんまい', '米洗い', 'こめあらい', '先まい', '先マイ', '線マイ', '1000枚', '千枚', '専売', 'おこめをあら', '米を洗'],
+        combos: [[['米', 'こめ', 'おこめ', 'お米'], ['あら', '洗', 'とぐ', '研']]]
+      },
+      {
+        category: '日本酒仕込み', subcategory: '蒸し米', color: '#4db6ac',
+        keys: ['蒸し米', 'むしまい', '蒸米', '蒸し作業', 'むしさぎょう', '虫枚', '無視まい', 'むしこめ', 'こめをむす'],
+        combos: [[['米', 'こめ', 'お米'], ['むす', 'むし', '蒸']]]
+      },
+      {
+        category: '日本酒仕込み', subcategory: '引き込み', color: '#4db6ac',
+        keys: ['引き込み', 'ひきこみ', '引込', '引込み', '引きこもり', 'ひきこみさぎょう', 'こうじむろにいれ'],
+        combos: [[['ひき', '引き'], ['こみ', '込み']]]
+      },
+      {
+        category: '日本酒仕込み', subcategory: '盛り', color: '#4db6ac',
+        keys: ['盛り', 'もり', '麹盛り', 'こうじもり', 'もりさぎょう', '盛り作業', '森作業'],
+        combos: [[['こうじ', '麹', 'もも', 'もり'], ['もり', '盛り']]]
+      },
+      {
+        category: '日本酒仕込み', subcategory: '出麹', color: '#4db6ac',
+        keys: ['出麹', 'でこうじ', '出こうじ', 'でぐち', 'で工事', '手工事', '出工事', '出小路', 'こうじだし', '麹出し'],
+        combos: [[['こうじ', '麹'], ['だす', 'だし', '出し', 'でる']]]
+      },
+      {
+        category: '日本酒仕込み', subcategory: '仕込み', color: '#4db6ac',
+        keys: ['仕込み', 'しこみ', '日本酒仕込み', 'もろみ', 'しこみさぎょう', '仕込', '酒仕込み'],
+        combos: [[['日本酒', 'にほんしゅ', 'もろみ', 'きもと', 'もと'], ['しこ', '仕込']]]
+      },
+      {
+        category: '日本酒仕込み', subcategory: '掛け米', color: '#4db6ac',
+        keys: ['掛け米', 'かけまい', '掛米', 'かけ枚', '賭け米', '欠け米', 'かけまいさぎょう'],
+        combos: [[['かけ', '掛け', '掛'], ['まい', '米', 'こめ']]]
+      },
 
       // 出荷対応
-      { category: '出荷対応', subcategory: '朝一出荷対応', color: '#8bc34a', keys: ['朝一出荷対応', '朝一出荷', '朝一', 'あさいち', 'デリコ'] },
-      { category: '出荷対応', subcategory: '県販・個人出荷対応', color: '#8bc34a', isAreaShip: true, keys: ['県販・個人出荷対応', '県販出荷', '個人出荷', '県販', 'けんぱん', '個人', 'こじん'] },
-      { category: '出荷対応', subcategory: '配達', color: '#8bc34a', keys: ['配達', 'はいたつ', '配送', '届け'] },
+      {
+        category: '出荷対応', subcategory: '朝一出荷対応', color: '#8bc34a',
+        keys: ['朝一出荷対応', '朝一出荷', '朝一', 'あさいち', '朝1', '朝いち', 'デリコ', 'でりこ', '朝一番'],
+        combos: [[['朝', 'あさ', '早朝'], ['出荷', 'しゅっか', '発送', 'はっそう', '荷物']]]
+      },
+      {
+        category: '出荷対応', subcategory: '県販・個人出荷対応', color: '#8bc34a', isAreaShip: true,
+        keys: ['県販・個人出荷対応', '県販出荷', '個人出荷', '県販', 'けんぱん', '検番', '県板', '乾パン', '建販', '個人', 'こじん', '個人発送', '通販出荷', '宅急便', '宅配'],
+        combos: [[['出荷', 'しゅっか', '発送', 'はっそう', '梱包', 'こんぽう', '送り'], ['けんぱん', '県販', '個人', 'こじん', 'お客']]]
+      },
+      {
+        category: '出荷対応', subcategory: '配達', color: '#8bc34a',
+        keys: ['配達', 'はいたつ', '配送', 'はいそう', '届け', 'とどけ', '納品', 'のうひん', 'もっていく', '持っていく'],
+        combos: [[['車', 'くるま', 'トラック', '軽トラ', '店', 'みせ'], ['とどけ', '届', '配達', 'はいたつ', '納品']]]
+      },
 
       // 在庫作り
-      { category: '在庫作り', subcategory: 'ラベル貼り', color: '#9e9e9e', keys: ['ラベル貼り', 'らべるはり', 'ラベル', 'らべる'] },
-      { category: '在庫作り', subcategory: '箱詰め作業', color: '#9e9e9e', keys: ['箱詰め作業', '箱詰め', 'はこづめ', '箱詰'] },
-      { category: '在庫作り', subcategory: 'その他', color: '#9e9e9e', keys: ['在庫作り', 'ざいこづくり', '在庫'] },
+      {
+        category: '在庫作り', subcategory: 'ラベル貼り', color: '#9e9e9e',
+        keys: ['ラベル貼り', 'らべるはり', 'ラベル', 'らべる', 'シール貼り', 'しーるはり', 'ラベルつけ'],
+        combos: [[['らべる', 'ラベル', 'しーる', 'シール'], ['は', '貼', 'つけ', '付']]]
+      },
+      {
+        category: '在庫作り', subcategory: '箱詰め作業', color: '#9e9e9e',
+        keys: ['箱詰め作業', '箱詰め', 'はこづめ', '箱詰', 'はこつめ', '箱作り', 'はこづくり', 'だんぼーる', '段ボール'],
+        combos: [[['はこ', '箱', 'けーす', 'ケース', '段ボール'], ['つ', '詰', 'つく', '作', 'おる', '折']]]
+      },
+      {
+        category: '在庫作り', subcategory: 'その他', color: '#9e9e9e',
+        keys: ['在庫作り', 'ざいこづくり', '在庫', 'ざいこ', '商品準備']
+      },
 
       // 詰め作業
-      { category: '詰め作業', subcategory: '缶ビール', color: '#42a5f5', keys: ['缶ビール', 'かんびーる', '缶詰め', '缶詰', 'かんづめ', '缶'] },
-      { category: '詰め作業', subcategory: '瓶ビール', color: '#42a5f5', keys: ['瓶ビール', 'びんびーる', 'ビンビール', '瓶詰め', '瓶詰', 'びんづめ', '瓶'] },
-      { category: '詰め作業', subcategory: 'ビールPET', color: '#42a5f5', keys: ['ビールPET', 'ペットボトル', 'ペット', 'PET'] },
-      { category: '詰め作業', subcategory: '日本酒', color: '#42a5f5', keys: ['日本酒詰め', '日本酒の詰め', '一升瓶', '四合瓶'] },
+      {
+        category: '詰め作業', subcategory: '缶ビール', color: '#42a5f5',
+        keys: ['缶ビール', 'かんびーる', '缶詰め', '缶詰', 'かんづめ', 'かんつめ', '缶の詰め', 'かんびーるつめ', 'かん'],
+        combos: [[['かん', '缶'], ['つめ', '詰', 'びーる', 'ビール']]]
+      },
+      {
+        category: '詰め作業', subcategory: '瓶ビール', color: '#42a5f5',
+        keys: ['瓶ビール', 'びんびーる', '瓶詰め', '瓶詰', 'びんづめ', 'びんつめ', '瓶の詰め', 'びんびーるつめ', '洗瓶', 'せんびん'],
+        combos: [[['びん', '瓶'], ['つめ', '詰', 'びーる', 'ビール', 'あら', '洗']]]
+      },
+      {
+        category: '詰め作業', subcategory: 'ビールPET', color: '#42a5f5',
+        keys: ['ビールpet', 'ぺっとぼとる', 'ペットボトル', 'ぺっと', 'pet詰め', 'petつめ'],
+        combos: [[['ぺっと', 'pet'], ['つめ', '詰', 'びーる', 'ビール']]]
+      },
+      {
+        category: '詰め作業', subcategory: '日本酒', color: '#42a5f5',
+        keys: ['日本酒詰め', '日本酒の詰め', '一升瓶', 'いっしょうびん', '四合瓶', 'しごうびん', '720ml', '300ml', '1.8l', '酒詰め'],
+        combos: [[['日本酒', 'にほんしゅ', 'お酒', 'おさけ', '一升', '四合'], ['つめ', '詰', 'びんづめ', '瓶詰']]]
+      },
 
       // その他共通
-      { category: 'その他共通', subcategory: '会議・打ち合わせ', color: '#e0e0e0', keys: ['会議・打ち合わせ', '会議', 'かいぎ', '打ち合わせ', 'うちあわせ', '打合せ', 'ミーティング'] },
-      { category: 'その他共通', subcategory: '休憩', color: '#e0e0e0', keys: ['休憩', 'きゅうけい', '休み', 'やすみ', '昼休み', 'ひるやすみ'] },
-      { category: 'その他共通', subcategory: '売店', color: '#e0e0e0', keys: ['売店', 'ばいてん', 'ショップ', '店頭', '接客', 'レジ'] },
-      { category: 'その他共通', subcategory: '事務関係', color: '#e0e0e0', keys: ['事務関係', '事務', 'じむ', '経理', '伝票', 'パソコン'] },
-      { category: 'その他共通', subcategory: '資料作成', color: '#e0e0e0', keys: ['資料作成', 'しりょうさくせい', '資料', '書類作成'] },
-      { category: 'その他共通', subcategory: '運搬', color: '#e0e0e0', keys: ['運搬', 'うんぱん', '移動', '積み込み', '荷物運び'] }
+      {
+        category: 'その他共通', subcategory: '会議・打ち合わせ', color: '#e0e0e0',
+        keys: ['会議・打ち合わせ', '会議', 'かいぎ', '打ち合わせ', 'うちあわせ', '打合せ', 'みーてぃんぐ', 'ミーティング', '朝会', 'ちょうかい', '朝礼', '面談', '相談', 'そうだん', '話し合い']
+      },
+      {
+        category: 'その他共通', subcategory: '休憩', color: '#e0e0e0',
+        keys: ['休憩', 'きゅうけい', '休み', 'やすみ', '昼休み', 'ひるやすみ', 'ランチ', 'らんち', '昼飯', 'ひるめし', 'お昼', 'おひる', '一服', 'いっぷく', 'お茶']
+      },
+      {
+        category: 'その他共通', subcategory: '売店', color: '#e0e0e0',
+        keys: ['売店', 'ばいてん', '閉店', '回転', 'しょっぷ', 'ショップ', '店頭', 'てんとう', '接客', 'せっきゃく', 'レジ', 'れじ', 'お店', 'おみせ', 'お土産', '試飲']
+      },
+      {
+        category: 'その他共通', subcategory: '事務関係', color: '#e0e0e0',
+        keys: ['事務関係', '事務', 'じむ', '経理', 'けいり', '伝票', 'でんぴょう', 'ぱそこん', 'パソコン', 'pc', 'メール', 'めーる', '電話', 'でんわ', '請求書', '発注', 'はっちゅう', '入力']
+      },
+      {
+        category: 'その他共通', subcategory: '資料作成', color: '#e0e0e0',
+        keys: ['資料作成', 'しりょうさくせい', '資料', 'しりょう', '書類作成', 'しょるい', 'えくせる', 'エクセル', '報告書', 'ほうこくしょ', '見積書', 'みつもり', '稟議書', '規格書']
+      },
+      {
+        category: 'その他共通', subcategory: '運搬', color: '#e0e0e0',
+        keys: ['運搬', 'うんぱん', '移動', 'いどう', '積み込み', 'つみこみ', '荷物運び', 'にもつはこび', '運び', 'はこび', 'はこぶ', '運ぶ', 'ふぉーく', 'フォーク', '軽トラ', 'けいとら', '積み上げ', 'つみあげ', '下ろし', 'おろし'],
+        combos: [[['ぱれっと', 'パレット', 'p箱', 'けーす', 'ケース', '荷物', '製品', '資材', 'びん', 'かん'], ['はこ', '運', 'もってい', '移動', 'つみ', '積', 'おろ', '下ろ']]]
+      }
     ];
 
     const AREA_ALIASES = [
       { name: '長野', keys: ['長野', 'ながの'] },
       { name: '松本', keys: ['松本', 'まつもと'] },
       { name: '上田', keys: ['上田', 'うえだ'] },
-      { name: '飯田', keys: ['飯田', 'いいだ'] },
-      { name: '諏訪', keys: ['諏訪', 'すわ'] },
-      { name: '佐久', keys: ['佐久', 'さく'] },
-      { name: '伊那', keys: ['伊那', 'いな'] }
+      { name: '飯田', keys: ['飯田', 'いいだ', '飯だ', 'いーだ'] },
+      { name: '諏訪', keys: ['諏訪', 'すわ', '座'] },
+      { name: '佐久', keys: ['佐久', 'さく', '柵'] },
+      { name: '伊那', keys: ['伊那', 'いな', '稲'] }
     ];
 
     function extractTimeFromVoice(text) {
       const normalized = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-      // HH:MM 形式
       let m = normalized.match(/(\d{1,2})\s*[:：]\s*(\d{2})/);
       if (m) {
         const h = Math.min(23, parseInt(m[1], 10));
         const min = Math.min(59, parseInt(m[2], 10));
         return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
       }
-      // 午後/午前 + N時(M分|半)
       m = normalized.match(/(午後|午前)?\s*(\d{1,2})\s*時\s*(?:(\d{1,2})\s*分|(半))?/);
       if (m) {
         let h = parseInt(m[2], 10);
@@ -2202,76 +2322,114 @@
       return found.length > 0 ? found.join(', ') : null;
     }
 
-    function parseVoiceCommand(rawText) {
-      const text = (rawText || '').trim();
-      const lower = text.toLowerCase();
+    function rankVoiceCandidates(texts) {
+      const altList = Array.isArray(texts) ? texts : [texts];
+      const primaryText = (altList[0] || '').trim();
+      const allNorm = altList.map(t => normalizeVoiceText(t));
 
-      // 地域名抽出
+      // 地域名抽出（全候補から）
       const matchedAreas = [];
       AREA_ALIASES.forEach(a => {
-        if (a.keys.some(k => lower.includes(k.toLowerCase()))) {
+        const hit = a.keys.some(k => {
+          const nk = normalizeVoiceText(k);
+          return allNorm.some(nt => nt.includes(nk));
+        });
+        if (hit && !matchedAreas.includes(a.name)) {
           matchedAreas.push(a.name);
         }
       });
 
-      // ルールマッチング（最長キーワード優先スコア）
-      let bestRule = null;
-      let bestScore = 0;
+      const scored = [];
       VOICE_RULES.forEach(rule => {
-        let ruleScore = 0;
+        let score = 0;
+        // キーワード一致（文字数に応じた重み）
         rule.keys.forEach(k => {
-          if (lower.includes(k.toLowerCase())) {
-            ruleScore = Math.max(ruleScore, k.length);
-          }
+          const nk = normalizeVoiceText(k);
+          if (!nk) return;
+          altList.forEach((raw, idx) => {
+            const nt = allNorm[idx];
+            if (nt.includes(nk)) {
+              const weight = idx === 0 ? 1 : 0.85; // 第1候補をやや優先
+              score = Math.max(score, Math.round(nk.length * 10 * weight));
+            }
+          });
         });
-        if (ruleScore > bestScore) {
-          bestScore = ruleScore;
-          bestRule = rule;
+
+        // 意味の組み合わせパターン一致
+        if (Array.isArray(rule.combos)) {
+          rule.combos.forEach(([groupA, groupB]) => {
+            allNorm.forEach((nt, idx) => {
+              const hitA = groupA.some(w => nt.includes(normalizeVoiceText(w)));
+              const hitB = groupB.some(w => nt.includes(normalizeVoiceText(w)));
+              if (hitA && hitB) {
+                const comboScore = idx === 0 ? 45 : 38;
+                score = Math.max(score, comboScore);
+              }
+            });
+          });
+        }
+
+        // 地域名が入っていて出荷系の場合のボーナス
+        if (rule.isAreaShip && matchedAreas.length > 0) {
+          score += 30;
+        }
+
+        if (score > 0) {
+          let sub = rule.subcategory;
+          if (rule.isAreaShip && matchedAreas.length > 0) {
+            sub = `県販・個人出荷対応 - ${matchedAreas.join(', ')}`;
+          }
+          scored.push({
+            category: rule.category,
+            subcategory: sub,
+            color: rule.color,
+            score
+          });
         }
       });
 
-      // 地域名が含まれており「出荷/発送」がある場合や「県販・個人出荷対応」が選ばれた場合
-      if ((!bestRule && matchedAreas.length > 0) || (bestRule && bestRule.isAreaShip)) {
-        const sub = matchedAreas.length > 0
-          ? `県販・個人出荷対応 - ${matchedAreas.join(', ')}`
-          : '県販・個人出荷対応';
-        return {
-          category: '出荷対応',
-          subcategory: sub,
-          color: '#8bc34a',
-          note: `🎤 ${text}`,
-          coWorkers: extractCoworkersFromVoice(text),
-          startTime: extractTimeFromVoice(text)
-        };
+      scored.sort((a, b) => b.score - a.score);
+
+      // 重複を除去して上位3件＋「その他」を用意
+      const candidates = [];
+      const seen = new Set();
+      scored.forEach(item => {
+        const key = `${item.category}::${item.subcategory}`;
+        if (!seen.has(key) && candidates.length < 3) {
+          seen.add(key);
+          candidates.push(item);
+        }
+      });
+
+      const otherKey = 'その他共通::その他';
+      if (!seen.has(otherKey)) {
+        candidates.push({ category: 'その他共通', subcategory: 'その他', color: '#e0e0e0', score: 0 });
       }
 
-      if (bestRule) {
-        return {
-          category: bestRule.category,
-          subcategory: bestRule.subcategory,
-          color: bestRule.color,
-          note: `🎤 ${text}`,
-          coWorkers: extractCoworkersFromVoice(text),
-          startTime: extractTimeFromVoice(text)
-        };
-      }
-
-      // 判別できない場合は「その他共通 - その他」に原文そのまま保存
       return {
-        category: 'その他共通',
-        subcategory: 'その他',
-        color: '#e0e0e0',
-        note: `🎤 ${text}`,
-        coWorkers: extractCoworkersFromVoice(text),
-        startTime: extractTimeFromVoice(text)
+        primaryText,
+        candidates,
+        coWorkers: extractCoworkersFromVoice(altList.join(' ')),
+        startTime: extractTimeFromVoice(primaryText)
       };
     }
 
     let voiceRecognition = null;
-    let voiceCurrentText = '';
+    let voiceCurrentAlts = [];
     let voiceSubmitted = false;
+    let voiceAutoTimer = null;
+    let voiceSelectedCand = null;
+    let voiceParsedMeta = null;
+
+    function clearVoiceAutoTimer() {
+      if (voiceAutoTimer) {
+        clearInterval(voiceAutoTimer);
+        voiceAutoTimer = null;
+      }
+    }
 
     function closeVoiceModal() {
+      clearVoiceAutoTimer();
       if (voiceRecognition) {
         try { voiceRecognition.abort(); } catch (e) { /* ignore */ }
         voiceRecognition = null;
@@ -2280,28 +2438,30 @@
       $('#voice-pulse-wrap').classList.add('stopped');
     }
 
-    async function submitVoiceText(rawText) {
-      if (voiceSubmitted) return;
-      const text = (rawText || '').trim();
-      if (!text) {
+    async function executeVoiceSave() {
+      if (voiceSubmitted || !voiceSelectedCand) return;
+      const fallbackVal = $('#voice-fallback-input') ? $('#voice-fallback-input').value.trim() : '';
+      const rawText = fallbackVal || (voiceCurrentAlts[0] || '').trim();
+      if (!rawText) {
         showToast('音声または文字が入力されていません');
         return;
       }
       voiceSubmitted = true;
+      const cand = voiceSelectedCand;
+      const meta = voiceParsedMeta || { coWorkers: null, startTime: nowTimeStr() };
       closeVoiceModal();
 
-      const parsed = parseVoiceCommand(text);
       try {
         const res = await API.createRecord(
-          parsed.category,
-          parsed.subcategory,
-          parsed.color,
-          parsed.note,
-          parsed.coWorkers,
-          parsed.startTime
+          cand.category,
+          cand.subcategory,
+          cand.color,
+          `🎤 ${rawText}`,
+          meta.coWorkers,
+          meta.startTime
         );
         if (res.success) {
-          showToast(`🎤 ${parsed.category} - ${parsed.subcategory} (${parsed.startTime}〜)`);
+          showToast(`🎤 ${cand.category} - ${cand.subcategory} (${meta.startTime}〜)`);
           checkCurrentWork();
         }
       } catch (e) {
@@ -2309,27 +2469,89 @@
       }
     }
 
+    function showVoiceCandidates(texts, autoStartCountdown = true) {
+      const parsed = rankVoiceCandidates(texts);
+      voiceParsedMeta = { coWorkers: parsed.coWorkers, startTime: parsed.startTime };
+      voiceSelectedCand = parsed.candidates[0];
+
+      const panel = $('#voice-result-panel');
+      const candWrap = $('#voice-candidates');
+      const metaEl = $('#voice-meta-info');
+      const statusEl = $('#voice-status-text');
+      const submitBtn = $('#btn-voice-submit');
+
+      candWrap.innerHTML = parsed.candidates.map((c, idx) => `
+        <button type="button" class="voice-cand-btn${idx === 0 ? ' active' : ''}" data-cand-idx="${idx}">
+          <span class="voice-cand-dot" style="background:${c.color}"></span>
+          <span>${c.category} - ${c.subcategory}</span>
+        </button>
+      `).join('');
+
+      candWrap.querySelectorAll('.voice-cand-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          clearVoiceAutoTimer();
+          const i = parseInt(btn.dataset.candIdx, 10);
+          voiceSelectedCand = parsed.candidates[i];
+          candWrap.querySelectorAll('.voice-cand-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          submitBtn.textContent = 'この項目で登録';
+          statusEl.textContent = '項目を選択しました';
+        });
+      });
+
+      const metaParts = [`⏰ ${parsed.startTime}`];
+      if (parsed.coWorkers) metaParts.push(`👥 ${parsed.coWorkers}`);
+      metaEl.textContent = metaParts.join('　');
+      panel.classList.remove('hidden');
+
+      clearVoiceAutoTimer();
+      if (autoStartCountdown) {
+        let sec = 2;
+        statusEl.textContent = `まもなく自動登録します (${sec}秒)`;
+        submitBtn.textContent = '今すぐ登録';
+        voiceAutoTimer = setInterval(() => {
+          sec--;
+          if (sec <= 0) {
+            clearVoiceAutoTimer();
+            executeVoiceSave();
+          } else {
+            statusEl.textContent = `まもなく自動登録します (${sec}秒)`;
+          }
+        }, 1000);
+      } else {
+        statusEl.textContent = '登録する項目を確認してください';
+        submitBtn.textContent = '登録する';
+      }
+    }
+
     function openVoiceModal() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      voiceCurrentText = '';
+      clearVoiceAutoTimer();
+      voiceCurrentAlts = [];
       voiceSubmitted = false;
+      voiceSelectedCand = null;
+      voiceParsedMeta = null;
 
       const modal = $('#voice-modal');
       const statusEl = $('#voice-status-text');
       const boxEl = $('#voice-transcript-box');
       const pulseEl = $('#voice-pulse-wrap');
+      const resultPanel = $('#voice-result-panel');
       const fallbackWrap = $('#voice-fallback-wrap');
       const fallbackInput = $('#voice-fallback-input');
+      const submitBtn = $('#btn-voice-submit');
 
-      boxEl.textContent = '例：「洗米始めます」「長野と松本に県販出荷」';
+      boxEl.textContent = '例：「洗米始めます」「タンクの中を洗います」「長野と松本に出荷」';
       boxEl.classList.remove('has-text');
+      resultPanel.classList.add('hidden');
       fallbackWrap.classList.add('hidden');
       fallbackInput.value = '';
+      submitBtn.textContent = '登録する';
       modal.classList.remove('hidden');
 
       if (!SpeechRecognition) {
         pulseEl.classList.add('stopped');
-        statusEl.textContent = 'このブラウザは音声認識に非対応です';
+        statusEl.textContent = '文字またはキーボードのマイクで入力してください';
         fallbackWrap.classList.remove('hidden');
         setTimeout(() => fallbackInput.focus(), 100);
         return;
@@ -2343,45 +2565,49 @@
         voiceRecognition.lang = 'ja-JP';
         voiceRecognition.interimResults = true;
         voiceRecognition.continuous = false;
+        voiceRecognition.maxAlternatives = 3;
 
         voiceRecognition.onresult = (event) => {
           let interim = '';
-          let finalStr = '';
+          let finalAlts = [];
           for (let i = 0; i < event.results.length; i++) {
             const res = event.results[i];
             if (res.isFinal) {
-              finalStr += res[0].transcript;
+              for (let a = 0; a < res.length; a++) {
+                if (res[a].transcript) finalAlts.push(res[a].transcript.trim());
+              }
             } else {
               interim += res[0].transcript;
             }
           }
-          const combined = (finalStr || interim).trim();
-          if (combined) {
-            voiceCurrentText = combined;
-            boxEl.textContent = combined;
+          const display = (finalAlts[0] || interim).trim();
+          if (display) {
+            voiceCurrentAlts = finalAlts.length > 0 ? finalAlts : [display];
+            boxEl.textContent = display;
             boxEl.classList.add('has-text');
           }
-          if (finalStr.trim()) {
-            submitVoiceText(finalStr.trim());
+          if (finalAlts.length > 0) {
+            pulseEl.classList.add('stopped');
+            showVoiceCandidates(finalAlts, true);
           }
         };
 
         voiceRecognition.onerror = (event) => {
           pulseEl.classList.add('stopped');
           if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            statusEl.textContent = 'マイクの許可が必要です';
+            statusEl.textContent = 'マイク許可が必要です（下の欄からも入力可）';
           } else if (event.error === 'no-speech') {
             statusEl.textContent = '音声が検出されませんでした';
           } else {
-            statusEl.textContent = '音声認識エラー（手入力も可）';
+            statusEl.textContent = '音声認識エラー（下の欄からも入力可）';
           }
           fallbackWrap.classList.remove('hidden');
         };
 
         voiceRecognition.onend = () => {
           pulseEl.classList.add('stopped');
-          if (!voiceSubmitted && voiceCurrentText) {
-            submitVoiceText(voiceCurrentText);
+          if (!voiceSubmitted && voiceCurrentAlts.length > 0 && $('#voice-result-panel').classList.contains('hidden')) {
+            showVoiceCandidates(voiceCurrentAlts, true);
           }
         };
 
@@ -2391,6 +2617,21 @@
         statusEl.textContent = '音声認識を開始できませんでした';
         fallbackWrap.classList.remove('hidden');
       }
+    }
+
+    if ($('#voice-fallback-input')) {
+      $('#voice-fallback-input').addEventListener('input', (e) => {
+        clearVoiceAutoTimer();
+        const val = e.target.value.trim();
+        if (val) {
+          voiceCurrentAlts = [val];
+          $('#voice-transcript-box').textContent = val;
+          $('#voice-transcript-box').classList.add('has-text');
+          showVoiceCandidates([val], false);
+        } else {
+          $('#voice-result-panel').classList.add('hidden');
+        }
+      });
     }
 
     if ($('#btn-voice-record')) {
@@ -2404,8 +2645,12 @@
     }
     if ($('#btn-voice-submit')) {
       $('#btn-voice-submit').addEventListener('click', () => {
+        clearVoiceAutoTimer();
         const fallbackVal = $('#voice-fallback-input') ? $('#voice-fallback-input').value.trim() : '';
-        submitVoiceText(fallbackVal || voiceCurrentText);
+        if (!voiceSelectedCand && (fallbackVal || voiceCurrentAlts.length > 0)) {
+          showVoiceCandidates(fallbackVal ? [fallbackVal] : voiceCurrentAlts, false);
+        }
+        executeVoiceSave();
       });
     }
   }
