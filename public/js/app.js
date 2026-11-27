@@ -2415,9 +2415,13 @@
     }
 
     let voiceRecognition = null;
+    let isVoiceListening = false;
+    let voiceModalOpen = false;
+    let voiceSessionId = 0;
     let voiceCurrentAlts = [];
     let voiceSubmitted = false;
     let voiceAutoTimer = null;
+    let voiceStartWatchTimer = null;
     let voiceSelectedCand = null;
     let voiceParsedMeta = null;
 
@@ -2428,12 +2432,170 @@
       }
     }
 
-    function closeVoiceModal() {
-      clearVoiceAutoTimer();
-      if (voiceRecognition) {
-        try { voiceRecognition.abort(); } catch (e) { /* ignore */ }
-        voiceRecognition = null;
+    function clearVoiceStartWatchTimer() {
+      if (voiceStartWatchTimer) {
+        clearTimeout(voiceStartWatchTimer);
+        voiceStartWatchTimer = null;
       }
+    }
+
+    function stopVoiceRecognitionSafe() {
+      clearVoiceStartWatchTimer();
+      if (voiceRecognition && isVoiceListening) {
+        try {
+          voiceRecognition.stop();
+        } catch (e) {
+          try { voiceRecognition.abort(); } catch (e2) { /* ignore */ }
+        }
+      }
+    }
+
+    function ensureVoiceRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return null;
+      if (voiceRecognition) return voiceRecognition;
+
+      const rec = new SpeechRecognition();
+      rec.lang = 'ja-JP';
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.maxAlternatives = 3;
+
+      rec.onstart = () => {
+        isVoiceListening = true;
+        clearVoiceStartWatchTimer();
+        if (!voiceModalOpen) {
+          try { rec.stop(); } catch (e) { /* ignore */ }
+          return;
+        }
+        $('#voice-pulse-wrap').classList.remove('stopped');
+        $('#voice-status-text').textContent = '🎤 聞き取り中... お話しください';
+      };
+
+      rec.onresult = (event) => {
+        if (!voiceModalOpen || voiceSubmitted) return;
+        let interim = '';
+        let finalAlts = [];
+        for (let i = 0; i < event.results.length; i++) {
+          const res = event.results[i];
+          if (res.isFinal) {
+            for (let a = 0; a < res.length; a++) {
+              if (res[a].transcript) finalAlts.push(res[a].transcript.trim());
+            }
+          } else {
+            interim += res[0].transcript;
+          }
+        }
+        const display = (finalAlts[0] || interim).trim();
+        if (display) {
+          voiceCurrentAlts = finalAlts.length > 0 ? finalAlts : [display];
+          const boxEl = $('#voice-transcript-box');
+          boxEl.textContent = display;
+          boxEl.classList.add('has-text');
+        }
+        if (finalAlts.length > 0) {
+          $('#voice-pulse-wrap').classList.add('stopped');
+          // 認識確定時に正常終了させてマイクを綺麗に解放する
+          stopVoiceRecognitionSafe();
+          showVoiceCandidates(finalAlts, true);
+        }
+      };
+
+      rec.onerror = (event) => {
+        isVoiceListening = false;
+        clearVoiceStartWatchTimer();
+        if (!voiceModalOpen || voiceSubmitted) return;
+        if (event.error === 'aborted') return;
+
+        $('#voice-pulse-wrap').classList.add('stopped');
+        const statusEl = $('#voice-status-text');
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          statusEl.textContent = 'マイク許可が必要です（下の欄からも入力可）';
+        } else if (event.error === 'no-speech') {
+          statusEl.textContent = '音声が検出されませんでした（マイクをタップで再試行）';
+        } else {
+          statusEl.textContent = '音声認識エラー（マイクをタップで再試行 / 下の欄からも入力可）';
+        }
+        $('#voice-fallback-wrap').classList.remove('hidden');
+      };
+
+      rec.onend = () => {
+        isVoiceListening = false;
+        clearVoiceStartWatchTimer();
+        if (!voiceModalOpen || voiceSubmitted) return;
+        $('#voice-pulse-wrap').classList.add('stopped');
+        if (voiceCurrentAlts.length > 0 && $('#voice-result-panel').classList.contains('hidden')) {
+          showVoiceCandidates(voiceCurrentAlts, true);
+        } else if (voiceCurrentAlts.length === 0 && $('#voice-result-panel').classList.contains('hidden')) {
+          $('#voice-status-text').textContent = '🎤 アイコンをタップしてもう一度話す';
+          $('#voice-fallback-wrap').classList.remove('hidden');
+        }
+      };
+
+      voiceRecognition = rec;
+      return voiceRecognition;
+    }
+
+    function startVoiceListening(sessionId, retryCount = 0) {
+      if (!voiceModalOpen || sessionId !== voiceSessionId) return;
+      const rec = ensureVoiceRecognition();
+      if (!rec) return;
+
+      const statusEl = $('#voice-status-text');
+      const pulseEl = $('#voice-pulse-wrap');
+
+      // 前回のセッションがまだ終了処理中の場合は少し待ってから開始する
+      if (isVoiceListening) {
+        stopVoiceRecognitionSafe();
+        if (retryCount < 6) {
+          setTimeout(() => startVoiceListening(sessionId, retryCount + 1), 180);
+          return;
+        }
+      }
+
+      statusEl.textContent = '🎤 マイクを起動中...';
+      pulseEl.classList.remove('stopped');
+      clearVoiceStartWatchTimer();
+
+      // 3秒経っても onstart が発火しない場合はインスタンスを再生成してリカバリ
+      voiceStartWatchTimer = setTimeout(() => {
+        if (!voiceModalOpen || sessionId !== voiceSessionId || isVoiceListening || voiceSubmitted) return;
+        if (retryCount === 0) {
+          try { voiceRecognition.abort(); } catch (e) { /* ignore */ }
+          voiceRecognition = null;
+          isVoiceListening = false;
+          startVoiceListening(sessionId, 1);
+        } else {
+          pulseEl.classList.add('stopped');
+          statusEl.textContent = 'マイクの反応がありません（マイクをタップで再試行）';
+          $('#voice-fallback-wrap').classList.remove('hidden');
+        }
+      }, 3000);
+
+      try {
+        rec.start();
+      } catch (e) {
+        clearVoiceStartWatchTimer();
+        // InvalidStateError 等で開始できなかった場合はインスタンスを作り直して1回だけ再試行
+        if (retryCount < 2) {
+          try { rec.abort(); } catch (e2) { /* ignore */ }
+          voiceRecognition = null;
+          isVoiceListening = false;
+          setTimeout(() => startVoiceListening(sessionId, retryCount + 1), 220);
+        } else {
+          pulseEl.classList.add('stopped');
+          statusEl.textContent = '音声認識を開始できませんでした（下の欄からも入力可）';
+          $('#voice-fallback-wrap').classList.remove('hidden');
+        }
+      }
+    }
+
+    function closeVoiceModal() {
+      voiceModalOpen = false;
+      voiceSessionId++;
+      clearVoiceAutoTimer();
+      clearVoiceStartWatchTimer();
+      stopVoiceRecognitionSafe();
       $('#voice-modal').classList.add('hidden');
       $('#voice-pulse-wrap').classList.add('stopped');
     }
@@ -2527,6 +2689,10 @@
     function openVoiceModal() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       clearVoiceAutoTimer();
+      clearVoiceStartWatchTimer();
+      voiceModalOpen = true;
+      voiceSessionId++;
+      const mySessionId = voiceSessionId;
       voiceCurrentAlts = [];
       voiceSubmitted = false;
       voiceSelectedCand = null;
@@ -2557,66 +2723,23 @@
         return;
       }
 
-      pulseEl.classList.remove('stopped');
-      statusEl.textContent = 'お話しください...';
+      startVoiceListening(mySessionId, 0);
+    }
 
-      try {
-        voiceRecognition = new SpeechRecognition();
-        voiceRecognition.lang = 'ja-JP';
-        voiceRecognition.interimResults = true;
-        voiceRecognition.continuous = false;
-        voiceRecognition.maxAlternatives = 3;
-
-        voiceRecognition.onresult = (event) => {
-          let interim = '';
-          let finalAlts = [];
-          for (let i = 0; i < event.results.length; i++) {
-            const res = event.results[i];
-            if (res.isFinal) {
-              for (let a = 0; a < res.length; a++) {
-                if (res[a].transcript) finalAlts.push(res[a].transcript.trim());
-              }
-            } else {
-              interim += res[0].transcript;
-            }
-          }
-          const display = (finalAlts[0] || interim).trim();
-          if (display) {
-            voiceCurrentAlts = finalAlts.length > 0 ? finalAlts : [display];
-            boxEl.textContent = display;
-            boxEl.classList.add('has-text');
-          }
-          if (finalAlts.length > 0) {
-            pulseEl.classList.add('stopped');
-            showVoiceCandidates(finalAlts, true);
-          }
-        };
-
-        voiceRecognition.onerror = (event) => {
-          pulseEl.classList.add('stopped');
-          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            statusEl.textContent = 'マイク許可が必要です（下の欄からも入力可）';
-          } else if (event.error === 'no-speech') {
-            statusEl.textContent = '音声が検出されませんでした';
-          } else {
-            statusEl.textContent = '音声認識エラー（下の欄からも入力可）';
-          }
-          fallbackWrap.classList.remove('hidden');
-        };
-
-        voiceRecognition.onend = () => {
-          pulseEl.classList.add('stopped');
-          if (!voiceSubmitted && voiceCurrentAlts.length > 0 && $('#voice-result-panel').classList.contains('hidden')) {
-            showVoiceCandidates(voiceCurrentAlts, true);
-          }
-        };
-
-        voiceRecognition.start();
-      } catch (e) {
-        pulseEl.classList.add('stopped');
-        statusEl.textContent = '音声認識を開始できませんでした';
-        fallbackWrap.classList.remove('hidden');
-      }
+    // マイクアイコンをタップしたら何度でもやり直せるようにする
+    if ($('#voice-pulse-wrap')) {
+      $('#voice-pulse-wrap').style.cursor = 'pointer';
+      $('#voice-pulse-wrap').addEventListener('click', () => {
+        if (!voiceModalOpen) return;
+        clearVoiceAutoTimer();
+        voiceCurrentAlts = [];
+        voiceSelectedCand = null;
+        $('#voice-result-panel').classList.add('hidden');
+        $('#voice-transcript-box').textContent = 'お話しください...';
+        $('#voice-transcript-box').classList.remove('has-text');
+        voiceSessionId++;
+        startVoiceListening(voiceSessionId, 0);
+      });
     }
 
     if ($('#voice-fallback-input')) {
